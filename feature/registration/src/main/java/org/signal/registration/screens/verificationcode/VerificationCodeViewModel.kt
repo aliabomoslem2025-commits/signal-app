@@ -146,6 +146,8 @@ class VerificationCodeViewModel(
     }
 
     val sessionChanged = state.sessionMetadata?.id != parentState.sessionMetadata.id
+    val isLocalAuthSession = parentState.sessionMetadata.id.startsWith("local:") ||
+      repository.isLocalAuthSession(parentState.sessionMetadata.id)
 
     val rateLimits = if (sessionChanged) {
       initializeRateLimits(parentState.sessionMetadata, parentState)
@@ -153,12 +155,23 @@ class VerificationCodeViewModel(
       state.rateLimits
     }
 
+    if (sessionChanged && isLocalAuthSession && !parentState.sessionMetadata.verified) {
+      // The local-auth API delivered the one-time code in the signed-challenge HTTPS response.
+      // Consume it only after the new session state has been published so CodeEntered sees the correct session.
+      val sessionId = parentState.sessionMetadata.id
+      viewModelScope.launch {
+        delay(1)
+        repository.consumeLocalAuthCode(sessionId)?.let { localCode ->
+          codeEntryPresenter.onEvent(CodeEntryFieldEvents.SetCode(localCode))
+        }
+      }
+    }
+
     return state.copy(
       sessionMetadata = parentState.sessionMetadata,
       e164 = parentState.sessionE164,
       rateLimits = rateLimits,
-      isLocalAuth = parentState.sessionMetadata.id.startsWith("local:") ||
-        repository.isLocalAuthSession(parentState.sessionMetadata.id)
+      isLocalAuth = isLocalAuthSession
     )
   }
 
