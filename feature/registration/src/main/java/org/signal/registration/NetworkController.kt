@@ -57,6 +57,9 @@ import kotlin.time.Duration
 
 interface NetworkController {
 
+  /** True when this client is configured for the LAN device-auth flow instead of SMS verification. */
+  fun isLocalAuthEnabled(): Boolean = false
+
   /**
    * Request that the service initialize a new registration session.
    *
