@@ -39,8 +39,13 @@ public final class LocalServerTrustStore implements TrustStore {
       final String pem;
       if (configJson == null) {
         try (InputStream input = context.getAssets().open("server-config.json")) {
-          final byte[] bytes = input.readAllBytes();
-          pem = new JSONObject(new String(bytes, StandardCharsets.UTF_8)).optString("trustedCaPem");
+          final ByteArrayOutputStream assetBytes = new ByteArrayOutputStream();
+          final byte[] buffer = new byte[4096];
+          int count;
+          while ((count = input.read(buffer)) != -1) {
+            assetBytes.write(buffer, 0, count);
+          }
+          pem = new JSONObject(new String(assetBytes.toByteArray(), StandardCharsets.UTF_8)).optString("trustedCaPem");
         }
       } else {
         pem = new JSONObject(configJson).optString("trustedCaPem");
