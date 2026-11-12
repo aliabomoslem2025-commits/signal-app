@@ -138,6 +138,14 @@
             android:theme="@style/TextSecure.DarkNoActionBar" />
 
         <activity
+            android:name=".registration.localauth.LocalAppPinActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:windowSoftInputMode="stateAlwaysVisible" />
+
+        <activity
             android:name=".registration.localauth.LocalNetworkSettingsActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
