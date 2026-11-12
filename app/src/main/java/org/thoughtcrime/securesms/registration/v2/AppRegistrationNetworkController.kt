@@ -175,6 +175,11 @@ class AppRegistrationNetworkController(
         SessionMetadata(sessionId, null, null, null, true, emptyList(), false)
       )
     }
+    if (localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
+      return RequestResult.Success(
+        SessionMetadata(sessionId, null, null, null, false, emptyList(), true)
+      )
+    }
     return registrationApi.getSessionStatus(sessionId)
   }
 
@@ -183,6 +188,11 @@ class AppRegistrationNetworkController(
     pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
+    if (localDeviceAuthClient.isChallengeSession(sessionId) || localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
+      return RequestResult.Success(
+        SessionMetadata(sessionId, null, null, null, false, emptyList(), localDeviceAuthClient.isCompletedLocalSession(sessionId))
+      )
+    }
     return registrationApi.updateVerificationSession(
       sessionId = sessionId,
       captchaToken = captchaToken,
