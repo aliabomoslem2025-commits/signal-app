@@ -332,7 +332,7 @@ fun AppSettingsScreen(
         item {
           Rows.TextRow(
             text = "Local server & device enrollment",
-            icon = SignalIcons.Server.painter,
+            icon = SignalIcons.Key.painter,
             onClick = { onEvent(AppSettingsEvent.LocalServerSettingsClicked) }
           )
         }
