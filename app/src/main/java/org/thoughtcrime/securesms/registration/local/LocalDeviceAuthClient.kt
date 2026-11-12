@@ -5,11 +5,9 @@ import android.util.Base64
 import org.json.JSONObject
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.registration.LocalAuthCodeBus
-import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -129,7 +127,7 @@ class LocalDeviceAuthClient(context: Context) {
       }
       val status = connection.responseCode
       val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-      val payload = stream?.bufferedReader(StandardCharsets.UTF_8)?.use(BufferedReader::readText).orEmpty()
+      val payload = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
       val json = if (payload.isBlank()) JSONObject() else JSONObject(payload)
       if (status !in 200..299) {
         throw IllegalStateException(json.optString("error").ifBlank { "Local authentication failed (HTTP $status)" })
