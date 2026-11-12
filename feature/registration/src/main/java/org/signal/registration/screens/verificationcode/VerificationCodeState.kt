@@ -16,6 +16,7 @@ data class VerificationCodeState(
   val e164: String = "",
   val isSubmittingCode: Boolean = false,
   val rateLimits: SmsAndCallRateLimits = SmsAndCallRateLimits(),
+  val isLocalAuth: Boolean = false,
   val incorrectCodeAttempts: Int = 0,
   val codeEntry: CodeEntryFieldState = CodeEntryFieldState(),
   val showContactSupportSheet: Boolean = false,
