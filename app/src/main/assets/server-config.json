@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "mode": "LOCAL_LAN",
+  "localAuthOnly": true,
+  "localAuthApiUrl": "https://messenger.lan",
+  "services": {
+    "signal": "https://messenger.lan",
+    "storage": "https://storage.messenger.lan",
+    "cdn0": "https://cdn0.messenger.lan",
+    "cdn2": "https://cdn2.messenger.lan",
+    "cdn3": "https://cdn3.messenger.lan",
+    "cdsi": "https://cdsi.messenger.lan",
+    "svr2": "https://svr2.messenger.lan",
+    "svrb": "https://svrb.messenger.lan",
+    "attachments": "https://attachments.messenger.lan",
+    "sfu": "https://sfu.messenger.lan",
+    "turn": "turns:turn.messenger.lan:5349"
+  },
+  "security": {
+    "requireHttps": true,
+    "allowCleartext": false,
+    "validateCertificates": true
+  }
+}
