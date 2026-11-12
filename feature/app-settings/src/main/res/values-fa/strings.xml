@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <resources>
+    <string name="LocalNetworkSettings__title">سرور محلی و دستگاه</string>
+    <string name="LocalNetworkSettings__summary">مدیریت نشانی سرویس‌های شبکه محلی و کپی کلید ثبت دستگاه</string>
     <!-- RegistrationLockV2Dialog -->
     <string name="RegistrationLockV2Dialog_turn_on_registration_lock">روشن کردن قفل ثبت‌نام؟</string>
     <string name="RegistrationLockV2Dialog_turn_off_registration_lock">خاموش کردن قفل ثبت‌نام؟</string>
