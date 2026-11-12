@@ -60,6 +60,9 @@ private fun LocalServerSettingsScreen(
   val context = LocalContext.current
   var json by rememberSaveable { mutableStateOf(initialConfig.exportJson()) }
   var error by rememberSaveable { mutableStateOf<String?>(null) }
+  var pin by rememberSaveable { mutableStateOf("") }
+  var confirmPin by rememberSaveable { mutableStateOf("") }
+  var pinEnabled by remember { mutableStateOf(LocalPinLockManager.isEnabled(context)) }
 
   Scaffold(
     topBar = {
@@ -117,6 +120,61 @@ private fun LocalServerSettingsScreen(
         modifier = Modifier.fillMaxWidth()
       ) {
         Text("Validate and save configuration")
+      }
+
+      Text("Local application PIN", style = MaterialTheme.typography.titleMedium)
+      Text(
+        if (pinEnabled) "A separate local PIN is enabled. The app will request it when returning from the background."
+        else "Optional. Set a 6–12 digit PIN to lock this app when it returns from the background.",
+        style = MaterialTheme.typography.bodyMedium
+      )
+      OutlinedTextField(
+        value = pin,
+        onValueChange = { value -> if (value.length <= 12 && value.all(Char::isDigit)) pin = value },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("New local PIN") },
+        singleLine = true,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+      )
+      OutlinedTextField(
+        value = confirmPin,
+        onValueChange = { value -> if (value.length <= 12 && value.all(Char::isDigit)) confirmPin = value },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("Confirm local PIN") },
+        singleLine = true,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+      )
+      Button(
+        onClick = {
+          try {
+            require(pin == confirmPin) { "PIN confirmation does not match" }
+            LocalPinLockManager.setPin(context, pin)
+            pin = ""
+            confirmPin = ""
+            pinEnabled = true
+            error = null
+            Toast.makeText(context, "Local app PIN enabled", Toast.LENGTH_LONG).show()
+          } catch (e: Exception) {
+            error = e.message ?: "Could not save local PIN"
+          }
+        },
+        enabled = pin.length in 6..12 && confirmPin.length in 6..12,
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Text(if (pinEnabled) "Change local PIN" else "Enable local PIN")
+      }
+      if (pinEnabled) {
+        TextButton(onClick = {
+          LocalPinLockManager.removePin(context)
+          pinEnabled = false
+          pin = ""
+          confirmPin = ""
+          Toast.makeText(context, "Local app PIN removed", Toast.LENGTH_LONG).show()
+        }) {
+          Text("Disable local PIN")
+        }
       }
 
       Text("Device enrollment", style = MaterialTheme.typography.titleMedium)
