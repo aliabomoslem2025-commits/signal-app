@@ -169,6 +169,8 @@ class RegistrationRepository(
     internal const val SIGNAL_LOGIN_PURCHASE_OPTION_ID = "nonumber"
   }
 
+  fun isLocalAuthEnabled(): Boolean = networkController.isLocalAuthEnabled()
+
   suspend fun createSession(e164: String): RequestResult<SessionMetadata, CreateSessionError> = withContext(Dispatchers.IO) {
     val fcmToken = networkController.getFcmToken()
     networkController.createSession(
