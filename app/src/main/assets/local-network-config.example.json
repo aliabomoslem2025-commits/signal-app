@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "environment": "lan",
+  "service": {
+    "baseUrl": "https://signal-server.lan",
+    "websocketUrl": "wss://signal-server.lan"
+  },
+  "storage": {
+    "baseUrl": "https://signal-storage.lan"
+  },
+  "cdn": {
+    "0": "https://signal-cdn.lan",
+    "2": "https://signal-cdn2.lan",
+    "3": "https://signal-cdn3.lan"
+  },
+  "cdsi": {
+    "baseUrl": "https://signal-cdsi.lan"
+  },
+  "svr2": {
+    "baseUrl": "https://signal-svr2.lan"
+  },
+  "svrb": {
+    "baseUrl": "https://signal-svrb.lan"
+  },
+  "secureStorage": {
+    "baseUrl": "https://signal-secure-storage.lan"
+  },
+  "keyTransparency": {
+    "baseUrl": "https://signal-key-transparency.lan"
+  },
+  "attachments": {
+    "uploadBaseUrl": "https://signal-attachments.lan"
+  },
+  "calling": {
+    "sfuBaseUrl": "https://signal-sfu.lan",
+    "turnBaseUrl": "https://signal-turn.lan"
+  },
+  "registration": {
+    "mode": "local-enrollment",
+    "localAuthBaseUrl": "https://signal-server.lan/v1/local-auth"
+  },
+  "tls": {
+    "certificateProfile": "lan-ca"
+  }
+}
