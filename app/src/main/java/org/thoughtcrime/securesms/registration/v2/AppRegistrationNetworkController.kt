@@ -66,6 +66,7 @@ import org.signal.network.service.UsernameService.ConfirmUsernameError
 import org.signal.network.service.UsernameService.ConfirmedUsername
 import org.signal.network.service.UsernameService.ReserveUsernameError
 import org.signal.registration.LinkAndSyncWaitResult
+import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.signal.registration.NetworkController
 import org.signal.registration.NetworkController.BackupMasterKeyError
 import org.signal.registration.NetworkController.GetSvrCredentialsError
@@ -140,6 +141,10 @@ class AppRegistrationNetworkController(
   private val registrationApi: RegistrationApiV2
 ) : NetworkController {
 
+  private val localDeviceAuthClient by lazy { LocalDeviceAuthClient(context) }
+
+  override fun isLocalAuthEnabled(): Boolean = localDeviceAuthClient.isEnabled
+
   companion object {
     private val TAG = Log.tag(AppRegistrationNetworkController::class)
     private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
@@ -152,10 +157,24 @@ class AppRegistrationNetworkController(
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
+    if (localDeviceAuthClient.isEnabled) {
+      return try {
+        RequestResult.Success(localDeviceAuthClient.createSession(e164))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        RequestResult.ApplicationError(e)
+      }
+    }
     return registrationApi.createVerificationSession(e164, fcmToken, mcc, mnc)
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
+    if (localDeviceAuthClient.isChallengeSession(sessionId)) {
+      return RequestResult.Success(
+        SessionMetadata(sessionId, null, null, null, true, emptyList(), false)
+      )
+    }
     return registrationApi.getSessionStatus(sessionId)
   }
 
@@ -177,6 +196,15 @@ class AppRegistrationNetworkController(
     androidSmsRetrieverSupported: Boolean,
     transport: VerificationCodeTransport
   ): RequestResult<SessionMetadata, RequestVerificationCodeError> {
+    if (localDeviceAuthClient.isChallengeSession(sessionId)) {
+      return try {
+        RequestResult.Success(localDeviceAuthClient.requestCode(sessionId))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        RequestResult.ApplicationError(e)
+      }
+    }
     return registrationApi.requestVerificationCode(sessionId, locale, androidSmsRetrieverSupported, transport)
   }
 
@@ -184,6 +212,15 @@ class AppRegistrationNetworkController(
     sessionId: String,
     verificationCode: String
   ): RequestResult<SessionMetadata, SubmitVerificationCodeError> {
+    if (localDeviceAuthClient.isChallengeSession(sessionId)) {
+      return try {
+        RequestResult.Success(localDeviceAuthClient.submitCode(sessionId, verificationCode))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        RequestResult.ApplicationError(e)
+      }
+    }
     return registrationApi.submitVerificationCode(sessionId, verificationCode)
   }
 
