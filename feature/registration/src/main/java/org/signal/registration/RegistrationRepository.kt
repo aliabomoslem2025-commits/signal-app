@@ -259,6 +259,18 @@ class RegistrationRepository(
     )
   }
 
+  /**
+   * Consumes the one-time code delivered directly by the LAN authentication endpoint.
+   * The code is held only until the active verification screen places it into the existing code-entry field.
+   */
+  fun consumeLocalAuthCode(registrationSessionId: String): String? {
+    return networkController.consumeLocalAuthCode(registrationSessionId)
+  }
+
+  fun isLocalAuthSession(registrationSessionId: String): Boolean {
+    return networkController.isLocalAuthSession(registrationSessionId)
+  }
+
   suspend fun getSvrCredentials(): RequestResult<SvrCredentials, NetworkController.GetSvrCredentialsError> = withContext(Dispatchers.IO) {
     networkController.getSvrCredentials().also {
       if (it is RequestResult.Success) {
