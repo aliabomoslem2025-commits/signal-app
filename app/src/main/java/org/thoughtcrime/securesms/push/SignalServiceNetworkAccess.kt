@@ -22,6 +22,7 @@ import org.thoughtcrime.securesms.BuildConfig
 import org.thoughtcrime.securesms.keyvalue.SettingsValues
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.keyvalue.proxy
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.net.CustomDns
 import org.thoughtcrime.securesms.net.DeprecatedClientPreventionInterceptor
 import org.thoughtcrime.securesms.net.DeviceTransferBlockingInterceptor
@@ -143,7 +144,25 @@ class SignalServiceNetworkAccess(context: Context) {
     private val MAYBE_CENSORED_DIRECT_FAILURE_COOLDOWN = 5.minutes
   }
 
-  private val serviceTrustStore: TrustStore = SignalServiceTrustStore(context)
+  private val localServerConfig: LocalServerConfig = LocalServerConfig.load(context)
+  private val isLocalLanDeployment: Boolean = localServerConfig.localAuthOnly
+  private val serviceTrustStore: TrustStore =
+    if (isLocalLanDeployment) LocalServerTrustStore(context) else SignalServiceTrustStore(context)
+  private val serviceBaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("signal") else BuildConfig.SIGNAL_URL
+  private val storageBaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("storage") else BuildConfig.STORAGE_URL
+  private val cdn0BaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("cdn0") else BuildConfig.SIGNAL_CDN_URL
+  private val cdn2BaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("cdn2") else BuildConfig.SIGNAL_CDN2_URL
+  private val cdn3BaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("cdn3") else BuildConfig.SIGNAL_CDN3_URL
+  private val cdsiBaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("cdsi") else BuildConfig.SIGNAL_CDSI_URL
+  private val svr2BaseUrl: String =
+    if (isLocalLanDeployment) localServerConfig.endpoint("svr2") else BuildConfig.SIGNAL_SVR2_URL
+
   private val gTrustStore: TrustStore = DomainFrontingTrustStore(context)
   private val fTrustStore: TrustStore = DomainFrontingDigicertTrustStore(context)
 
@@ -260,18 +279,18 @@ class SignalServiceNetworkAccess(context: Context) {
   )
 
   val uncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
-    signalServiceUrls = arrayOf(SignalServiceUrl(BuildConfig.SIGNAL_URL, serviceTrustStore)),
+    signalServiceUrls = arrayOf(SignalServiceUrl(serviceBaseUrl, serviceTrustStore)),
     signalCdnUrlMap = mapOf(
-      0 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN_URL, serviceTrustStore)),
-      2 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN2_URL, serviceTrustStore)),
-      3 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN3_URL, serviceTrustStore))
+      0 to arrayOf(SignalCdnUrl(cdn0BaseUrl, serviceTrustStore)),
+      2 to arrayOf(SignalCdnUrl(cdn2BaseUrl, serviceTrustStore)),
+      3 to arrayOf(SignalCdnUrl(cdn3BaseUrl, serviceTrustStore))
     ),
-    signalStorageUrls = arrayOf(SignalStorageUrl(BuildConfig.STORAGE_URL, serviceTrustStore)),
-    signalCdsiUrls = arrayOf(SignalCdsiUrl(BuildConfig.SIGNAL_CDSI_URL, serviceTrustStore)),
-    signalSvr2Urls = arrayOf(SignalSvr2Url(BuildConfig.SIGNAL_SVR2_URL, serviceTrustStore)),
-    networkInterceptors = interceptors + directFetchFailureInterceptor,
-    dns = Optional.of(DNS),
-    signalProxy = if (SignalStore.proxy.isProxyEnabled) Optional.ofNullable(SignalStore.proxy.proxy) else Optional.empty(),
+    signalStorageUrls = arrayOf(SignalStorageUrl(storageBaseUrl, serviceTrustStore)),
+    signalCdsiUrls = arrayOf(SignalCdsiUrl(cdsiBaseUrl, serviceTrustStore)),
+    signalSvr2Urls = arrayOf(SignalSvr2Url(svr2BaseUrl, serviceTrustStore)),
+    networkInterceptors = if (isLocalLanDeployment) interceptors else interceptors + directFetchFailureInterceptor,
+    dns = Optional.of(if (isLocalLanDeployment) Dns.SYSTEM else DNS),
+    signalProxy = if (!isLocalLanDeployment && SignalStore.proxy.isProxyEnabled) Optional.ofNullable(SignalStore.proxy.proxy) else Optional.empty(),
     zkGroupServerPublicParams = zkGroupServerPublicParams,
     genericServerPublicParams = genericServerPublicParams,
     backupServerPublicParams = backupServerPublicParams,
@@ -295,7 +314,7 @@ class SignalServiceNetworkAccess(context: Context) {
   }
 
   fun getConfiguration(e164: String?): SignalServiceConfiguration {
-    if (e164 == null || SignalStore.proxy.isProxyEnabled) {
+    if (isLocalLanDeployment || e164 == null || SignalStore.proxy.isProxyEnabled) {
       return uncensoredConfiguration
     }
 
