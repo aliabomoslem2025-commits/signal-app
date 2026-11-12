@@ -9,7 +9,6 @@ import android.app.backup.BackupManager
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
-import com.google.android.gms.auth.api.phone.SmsRetriever
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -651,32 +650,9 @@ object RegistrationRepository {
       .toList()
   }
 
-  /**
-   * Starts an SMS listener to auto-enter a verification code.
-   *
-   * The listener [lives for 5 minutes](https://developers.google.com/android/reference/com/google/android/gms/auth/api/phone/SmsRetrieverApi).
-   *
-   * @return whether or not the Play Services SMS Listener was successfully registered.
-   */
-  suspend fun registerSmsListener(context: Context): Boolean {
-    Log.d(TAG, "Attempting to start verification code SMS retriever.")
-    val started = withTimeoutOrNull(5.seconds.inWholeMilliseconds) {
-      try {
-        SmsRetriever.getClient(context).startSmsRetriever().await()
-        Log.d(TAG, "Successfully started verification code SMS retriever.")
-        return@withTimeoutOrNull true
-      } catch (ex: Exception) {
-        Log.w(TAG, "Could not start verification code SMS retriever due to exception.", ex)
-        return@withTimeoutOrNull false
-      }
-    }
+  /** SMS Retriever is disabled; LAN verification codes are delivered in the authenticated API response. */
+  suspend fun registerSmsListener(context: Context): Boolean = false
 
-    if (started == null) {
-      Log.w(TAG, "Could not start verification code SMS retriever due to timeout.")
-    }
-
-    return started == true
-  }
 
   @VisibleForTesting
   fun generateSignedAndLastResortPreKeys(identity: IdentityKeyPair, metadataStore: PreKeyMetadataStore): PreKeyCollection {
@@ -745,7 +721,7 @@ object RegistrationRepository {
   }
 
   enum class E164VerificationMode(val isSmsRetrieverSupported: Boolean, val transport: PushServiceSocket.VerificationCodeTransport) {
-    SMS_WITH_LISTENER(true, PushServiceSocket.VerificationCodeTransport.SMS),
+    SMS_WITH_LISTENER(false, PushServiceSocket.VerificationCodeTransport.SMS),
     SMS_WITHOUT_LISTENER(false, PushServiceSocket.VerificationCodeTransport.SMS),
     PHONE_CALL(false, PushServiceSocket.VerificationCodeTransport.VOICE)
   }
