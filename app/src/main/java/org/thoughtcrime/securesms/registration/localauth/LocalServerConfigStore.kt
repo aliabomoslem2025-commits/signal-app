@@ -1,0 +1,138 @@
+/*
+ * Copyright 2026 Signal Messenger, LLC
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+package org.thoughtcrime.securesms.registration.localauth
+
+import android.content.Context
+import android.net.Uri
+import org.json.JSONObject
+
+/**
+ * Runtime endpoint configuration for a privately deployed Signal server.
+ *
+ * The admin bearer token is deliberately not part of this configuration. It belongs only on the
+ * server and must never be packaged in the APK.
+ */
+data class LocalServerConfig(
+  val apiBaseUrl: String,
+  val websocketBaseUrl: String,
+  val cdn0: String,
+  val cdn2: String,
+  val cdn3: String,
+  val storage: String,
+  val cdsi: String,
+  val svr2: String,
+  val svrb: String,
+  val attachments: String,
+  val sfu: String,
+  val turn: String,
+  val smsEnabled: Boolean,
+  val allowCleartext: Boolean,
+  val validateCertificates: Boolean
+) {
+  fun validate(): LocalServerConfig {
+    require(isHttpEndpoint(apiBaseUrl)) { "apiBaseUrl must use HTTPS" }
+    require(isWebSocketEndpoint(websocketBaseUrl)) { "websocketBaseUrl must use WSS" }
+    require(isHttpEndpoint(cdn0)) { "cdn0 must use HTTPS" }
+    require(isHttpEndpoint(cdn2)) { "cdn2 must use HTTPS" }
+    require(isHttpEndpoint(cdn3)) { "cdn3 must use HTTPS" }
+    require(isHttpEndpoint(storage)) { "storage must use HTTPS" }
+    require(isHttpEndpoint(cdsi)) { "cdsi must use HTTPS" }
+    require(isHttpEndpoint(svr2)) { "svr2 must use HTTPS" }
+    require(isHttpEndpoint(svrb)) { "svrb must use HTTPS" }
+    require(isHttpEndpoint(attachments)) { "attachments must use HTTPS" }
+    require(isHttpEndpoint(sfu)) { "sfu must use HTTPS" }
+    require(turn.startsWith("turn:") || turn.startsWith("turns:")) { "turn must use TURN/TURNS" }
+    require(!allowCleartext) { "Cleartext traffic is not supported for local authentication" }
+    require(validateCertificates) { "TLS certificate validation cannot be disabled" }
+    require(!smsEnabled) { "SMS verification is disabled in LOCAL_DEVICE_AUTH mode" }
+    return this
+  }
+
+  private fun isHttpEndpoint(value: String): Boolean {
+    val uri = Uri.parse(value)
+    return uri.scheme == "https" && !uri.host.isNullOrBlank()
+  }
+
+  private fun isWebSocketEndpoint(value: String): Boolean {
+    val uri = Uri.parse(value)
+    return uri.scheme == "wss" && !uri.host.isNullOrBlank()
+  }
+}
+
+object LocalServerConfigStore {
+  private const val PREFS_NAME = "local_server_config"
+  private const val CONFIG_KEY = "config_json"
+
+  fun load(context: Context): LocalServerConfig {
+    val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val saved = preferences.getString(CONFIG_KEY, null)
+    val raw = saved ?: context.applicationContext.assets.open("server-config.json").bufferedReader().use { it.readText() }
+    return parse(JSONObject(raw)).validate()
+  }
+
+  fun save(context: Context, config: LocalServerConfig) {
+    val validated = config.validate()
+    val json = JSONObject().apply {
+      put("schemaVersion", 1)
+      put("environment", "LAN")
+      put("apiBaseUrl", validated.apiBaseUrl)
+      put("websocketBaseUrl", validated.websocketBaseUrl)
+      put("modules", JSONObject().apply {
+        put("cdn0", validated.cdn0)
+        put("cdn2", validated.cdn2)
+        put("cdn3", validated.cdn3)
+        put("storage", validated.storage)
+        put("cdsi", validated.cdsi)
+        put("svr2", validated.svr2)
+        put("svrb", validated.svrb)
+        put("attachments", validated.attachments)
+        put("sfu", validated.sfu)
+        put("turn", validated.turn)
+      })
+      put("authentication", JSONObject().apply {
+        put("mode", "LOCAL_DEVICE_AUTH")
+        put("smsEnabled", validated.smsEnabled)
+      })
+      put("security", JSONObject().apply {
+        put("allowCleartext", validated.allowCleartext)
+        put("validateCertificates", validated.validateCertificates)
+      })
+    }
+    context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .putString(CONFIG_KEY, json.toString())
+      .apply()
+  }
+
+  fun reset(context: Context) {
+    context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .remove(CONFIG_KEY)
+      .apply()
+  }
+
+  private fun parse(root: JSONObject): LocalServerConfig {
+    val modules = root.optJSONObject("modules") ?: JSONObject()
+    val authentication = root.optJSONObject("authentication") ?: JSONObject()
+    val security = root.optJSONObject("security") ?: JSONObject()
+    return LocalServerConfig(
+      apiBaseUrl = root.optString("apiBaseUrl", ""),
+      websocketBaseUrl = root.optString("websocketBaseUrl", ""),
+      cdn0 = modules.optString("cdn0", ""),
+      cdn2 = modules.optString("cdn2", ""),
+      cdn3 = modules.optString("cdn3", ""),
+      storage = modules.optString("storage", ""),
+      cdsi = modules.optString("cdsi", ""),
+      svr2 = modules.optString("svr2", ""),
+      svrb = modules.optString("svrb", ""),
+      attachments = modules.optString("attachments", ""),
+      sfu = modules.optString("sfu", ""),
+      turn = modules.optString("turn", ""),
+      smsEnabled = authentication.optBoolean("smsEnabled", false),
+      allowCleartext = security.optBoolean("allowCleartext", false),
+      validateCertificates = security.optBoolean("validateCertificates", true)
+    )
+  }
+}
