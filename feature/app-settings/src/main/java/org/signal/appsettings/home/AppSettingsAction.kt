@@ -15,4 +15,7 @@ sealed interface AppSettingsAction {
 
   /** Open the donation page in the browser, for users who can't donate in the app. */
   data object OpenDonateUrl : AppSettingsAction
+
+  /** Open the administrator-configurable private LAN endpoint and device enrollment settings. */
+  data object OpenLocalServerSettings : AppSettingsAction
 }
