@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 
 import androidx.activity.EdgeToEdge;
@@ -16,6 +18,9 @@ import androidx.core.app.ActivityOptionsCompat;
 
 import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
+import org.signal.core.util.AppForegroundObserver;
+import org.thoughtcrime.securesms.registration.localauth.LocalAppPinActivity;
+import org.thoughtcrime.securesms.registration.localauth.LocalAppPinManager;
 import org.thoughtcrime.securesms.util.AppStartup;
 import org.signal.core.util.ConfigurationUtil;
 import org.thoughtcrime.securesms.util.WindowUtil;
@@ -44,6 +49,14 @@ public abstract class BaseActivity extends AppCompatActivity {
   protected void onResume() {
     super.onResume();
     WindowUtil.initializeScreenshotSecurity(this, getWindow());
+
+    if (!(this instanceof LocalAppPinActivity) &&
+        LocalAppPinManager.INSTANCE.isEnabled(this) &&
+        !LocalAppPinManager.INSTANCE.isUnlocked()) {
+      Intent intent = new Intent(this, LocalAppPinActivity.class)
+          .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+      startActivity(intent);
+    }
   }
 
   @Override
@@ -57,6 +70,13 @@ public abstract class BaseActivity extends AppCompatActivity {
   protected void onStop() {
     logEvent("onStop()");
     super.onStop();
+
+    // Wait for activity transitions to finish before treating the app as backgrounded.
+    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+      if (!AppForegroundObserver.isForegrounded()) {
+        LocalAppPinManager.INSTANCE.lock();
+      }
+    }, 500);
   }
 
   @Override
