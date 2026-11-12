@@ -116,6 +116,7 @@ import org.thoughtcrime.securesms.preferences.EditProxyActivity;
 import org.thoughtcrime.securesms.ratelimit.RateLimitUtil;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.registration.util.RegistrationUtil;
+import org.thoughtcrime.securesms.registration.local.LocalPinLockManager;
 import org.thoughtcrime.securesms.registration.v2.AppContactSupportController;
 import org.thoughtcrime.securesms.registration.v2.AppRegistrationNetworkController;
 import org.thoughtcrime.securesms.registration.v2.AppRegistrationStorageController;
@@ -280,6 +281,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
 
   @Override
   public void onForeground() {
+    LocalPinLockManager.onAppForegrounded(this);
     long startTime = System.currentTimeMillis();
     Log.i(TAG, "App is now visible. Battery: " + DeviceProperties.getBatteryLevel(this) + "% (charging: " + DeviceProperties.isCharging(this) + ")");
 
@@ -329,6 +331,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
 
   @Override
   public void onBackground() {
+    LocalPinLockManager.onAppBackgrounded(this);
     Log.i(TAG, "App is no longer visible.");
     BatterySnapshotTracker.emit(this, "background");
     KeyCachingService.onAppBackgrounded(this);
