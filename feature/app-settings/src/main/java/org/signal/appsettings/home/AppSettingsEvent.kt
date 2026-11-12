@@ -64,6 +64,9 @@ sealed interface AppSettingsEvent {
   /** The user tapped the app updates row. */
   data object AppUpdatesClicked : AppSettingsEvent
 
+  /** The user tapped the private LAN server settings row. */
+  data object LocalNetworkClicked : AppSettingsEvent
+
   /** The user tapped the payments row. */
   data object PaymentsClicked : AppSettingsEvent
 
