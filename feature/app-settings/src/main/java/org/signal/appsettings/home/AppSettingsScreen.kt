@@ -331,6 +331,14 @@ fun AppSettingsScreen(
 
         item {
           Rows.TextRow(
+            text = "Local server & device enrollment",
+            icon = SignalIcons.Server.painter,
+            onClick = { onEvent(AppSettingsEvent.LocalServerSettingsClicked) }
+          )
+        }
+
+        item {
+          Rows.TextRow(
             text = stringResource(R.string.preferences__help),
             icon = SignalIcons.Help.painter,
             onClick = { onEvent(AppSettingsEvent.HelpClicked) },
