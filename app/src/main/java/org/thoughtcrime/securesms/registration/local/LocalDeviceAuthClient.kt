@@ -31,6 +31,15 @@ class LocalDeviceAuthClient(context: Context) {
 
   fun isChallengeSession(sessionId: String): Boolean = sessionId.startsWith(CHALLENGE_PREFIX)
 
+  fun isCompletedLocalSession(sessionId: String): Boolean {
+    return try {
+      val bytes = Base64.decode(sessionId, Base64.DEFAULT)
+      String(bytes, StandardCharsets.UTF_8).startsWith("LAN1.")
+    } catch (_: IllegalArgumentException) {
+      false
+    }
+  }
+
   suspend fun createSession(phone: String): SessionMetadata = withContext(Dispatchers.IO) {
     val challenge = post(
       "/v1/local-auth/challenge",
