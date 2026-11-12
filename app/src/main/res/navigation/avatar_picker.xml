@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/avatar_picker"
+    app:startDestination="@id/avatarPickerFragment">
+
+    <fragment
+        android:id="@+id/avatarPickerFragment"
+        android:name="org.thoughtcrime.securesms.avatar.picker.AvatarPickerFragment"
+        android:label="fragment_pick_avatar">
+
+        <argument
+            android:name="group_id"
+            app:argType="org.thoughtcrime.securesms.groups.GroupId"
+            app:nullable="true" />
+
+        <argument
+            android:name="is_new_group"
+            android:defaultValue="false"
+            app:argType="boolean" />
+
+        <argument
+            android:name="group_avatar_media"
+            app:argType="org.signal.core.models.media.Media"
+            app:nullable="true" />
+    </fragment>
+
+    <activity
+        android:id="@+id/avatarPhotoEditorActivity"
+        android:name="org.thoughtcrime.securesms.avatar.photo.PhotoEditorActivity"
+        android:label="fragment_avatar_photo_editor">
+        <argument
+            android:name="photo_avatar"
+            app:argType="android.os.Bundle" />
+    </activity>
+
+</navigation>

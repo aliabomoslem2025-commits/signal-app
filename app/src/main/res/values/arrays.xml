@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+
+
+
+
+
+
+  <string-array name="default_or_custom_values" translatable="false">
+      <item>default</item>
+      <item>custom</item>
+  </string-array>
+
+  <string-array name="default_or_custom_entries">
+      <item>@string/arrays__use_default</item>
+      <item>@string/arrays__use_custom</item>
+  </string-array>
+
+  <string-array name="mute_durations">
+      <item>@string/arrays__mute_for_one_hour</item>
+      <item>@string/arrays__mute_for_eight_hours</item>
+      <item>@string/arrays__mute_for_one_day</item>
+      <item>@string/arrays__mute_for_seven_days</item>
+      <item>@string/arrays__always</item>
+  </string-array>
+
+  <string-array name="recipient_vibrate_entries">
+      <item>@string/arrays__settings_default</item>
+      <item>@string/arrays__enabled</item>
+      <item>@string/arrays__disabled</item>
+  </string-array>
+
+
+
+  <!-- discrete MIME type (the part before the "/") -->
+
+  <string-array name="pref_media_download_mobile_data_default">
+      <item>image</item>
+      <item>audio</item>
+  </string-array>
+
+  <string-array name="pref_media_download_wifi_default">
+      <item>image</item>
+      <item>audio</item>
+      <item>video</item>
+      <item>documents</item>
+  </string-array>
+
+  <string-array name="pref_media_download_roaming_default" />
+
+    <!-- RedPhone -->
+
+    <integer-array name="pref_message_font_quote_size_values">
+        <item>12</item>
+        <item>14</item>
+        <item>18</item>
+        <item>22</item>
+    </integer-array>
+
+
+
+    <string-array name="MediaOverviewActivity_Sort_by">
+        <item>@string/MediaOverviewActivity_Newest</item>
+        <item>@string/MediaOverviewActivity_Oldest</item>
+        <item>@string/MediaOverviewActivity_Storage_used</item>
+    </string-array>
+
+    <string-array name="SoundsAndNotificationsSettingsFragment__mention_labels">
+        <item>@string/SoundsAndNotificationsSettingsFragment__always_notify</item>
+        <item>@string/SoundsAndNotificationsSettingsFragment__do_not_notify</item>
+    </string-array>
+
+    <string-array name="SoundsAndNotificationsSettingsFragment__call_labels">
+        <item>@string/SoundsAndNotificationsSettingsFragment__always_notify</item>
+        <item>@string/SoundsAndNotificationsSettingsFragment__do_not_notify</item>
+    </string-array>
+
+    <string-array name="SoundsAndNotificationsSettingsFragment__reply_labels">
+        <item>@string/SoundsAndNotificationsSettingsFragment__always_notify</item>
+        <item>@string/SoundsAndNotificationsSettingsFragment__do_not_notify</item>
+    </string-array>
+
+    <integer-array name="PlaybackSpeedToggleTextView__speeds">
+        <item>100</item>
+        <item>150</item>
+        <item>200</item>
+        <item>50</item>
+    </integer-array>
+    <string-array name="PlaybackSpeedToggleTextView__speed_labels">
+        <item>@string/PlaybackSpeedToggleTextView__1x</item>
+        <item>@string/PlaybackSpeedToggleTextView__1p5x</item>
+        <item>@string/PlaybackSpeedToggleTextView__2x</item>
+        <item>@string/PlaybackSpeedToggleTextView__p5x</item>
+    </string-array>
+
+    <integer-array name="ConversationFragment__pinned_for_values">
+        <item>1</item>
+        <item>7</item>
+        <item>30</item>
+        <item>-1</item>
+    </integer-array>
+    <string-array name="ConversationFragment__pinned_for_labels">
+        <item>@string/ConversationFragment__24_hours</item>
+        <item>@string/ConversationFragment__7_days</item>
+        <item>@string/ConversationFragment__30_days</item>
+        <item>@string/ConversationFragment__forever</item>
+    </string-array>
+
+    <string-array name="filter_search_entries">
+        <item>@string/MemberSearchFragment__filter_all_members</item>
+        <item>@string/MemberSearchFragment__filter_admins</item>
+        <item>@string/MemberSearchFragment__filter_contacts</item>
+    </string-array>
+</resources>
