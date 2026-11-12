@@ -66,10 +66,29 @@ object LocalServerConfigStore {
   private const val CONFIG_KEY = "config_json"
 
   fun load(context: Context): LocalServerConfig {
+    return parse(JSONObject(readRawJson(context))).validate()
+  }
+
+  /** Returns the editable JSON currently in use, falling back to the packaged LAN template. */
+  fun readRawJson(context: Context): String {
     val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    val saved = preferences.getString(CONFIG_KEY, null)
-    val raw = saved ?: context.applicationContext.assets.open("server-config.json").bufferedReader().use { it.readText() }
-    return parse(JSONObject(raw)).validate()
+    return preferences.getString(CONFIG_KEY, null)
+      ?: context.applicationContext.assets.open("server-config.json").bufferedReader().use { it.readText() }
+  }
+
+  /**
+   * Validates the complete configuration before persisting it. Invalid or insecure settings never replace
+   * the last-known-good configuration.
+   */
+  fun saveRawJson(context: Context, rawJson: String) {
+    require(rawJson.length <= 64 * 1024) { "Configuration file is too large (maximum 64 KiB)." }
+    val root = JSONObject(rawJson)
+    require(root.optInt("schemaVersion", -1) == 1) { "Unsupported server-config.json schemaVersion." }
+    parse(root).validate()
+    context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .putString(CONFIG_KEY, root.toString(2))
+      .apply()
   }
 
   fun save(context: Context, config: LocalServerConfig) {
