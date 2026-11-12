@@ -1,7 +1,6 @@
 package org.thoughtcrime.securesms.registration.local
 
 import android.content.Context
-import android.util.Patterns
 import org.json.JSONObject
 
 /**
@@ -57,10 +56,11 @@ class LocalServerConfig private constructor(
   fun importJson(json: String) {
     val parsed = JSONObject(json)
     require(parsed.optInt("schemaVersion") == 1) { "Unsupported server-config.json schemaVersion" }
-    require(parsed.optBoolean("security", JSONObject()).optBoolean("requireHttps", true)) {
+    val security = parsed.optJSONObject("security") ?: JSONObject()
+    require(security.optBoolean("requireHttps", true)) {
       "LAN deployments must require HTTPS"
     }
-    require(parsed.optBoolean("security", JSONObject()).optBoolean("validateCertificates", true)) {
+    require(security.optBoolean("validateCertificates", true)) {
       "Certificate validation cannot be disabled"
     }
     normalizedEndpoint(parsed.optString("localAuthApiUrl"))
