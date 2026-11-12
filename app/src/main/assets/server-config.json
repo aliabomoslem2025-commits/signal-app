@@ -3,6 +3,7 @@
   "mode": "LOCAL_LAN",
   "localAuthOnly": true,
   "localAuthApiUrl": "https://messenger.lan",
+  "trustedCaPem": "",
   "services": {
     "signal": "https://messenger.lan",
     "storage": "https://storage.messenger.lan",
