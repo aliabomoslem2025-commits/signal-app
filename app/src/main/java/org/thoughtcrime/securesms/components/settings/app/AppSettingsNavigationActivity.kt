@@ -131,6 +131,7 @@ class AppSettingsNavigationActivity : PassphraseRequiredActivity(), GooglePayCom
   private fun tryLaunchActivity(route: AppSettingsRoute): Boolean {
     val intent = when (route) {
       AppSettingsRoute.Payments -> Intent(this, PaymentsActivity::class.java)
+      AppSettingsRoute.LocalNetwork -> Intent(this, org.thoughtcrime.securesms.registration.localauth.LocalNetworkSettingsActivity::class.java)
       AppSettingsRoute.AppearanceRoute.Wallpaper -> ChatWallpaperActivity.createIntent(this)
       AppSettingsRoute.PrivacyRoute.BlockedUsers -> Intent(this, BlockedUsersActivity::class.java)
       AppSettingsRoute.AccountRoute.OldDeviceTransfer -> Intent(this, OldDeviceTransferActivity::class.java)
