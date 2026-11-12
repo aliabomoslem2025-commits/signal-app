@@ -99,6 +99,38 @@ interface NetworkController {
    */
   suspend fun submitVerificationCode(sessionId: String, verificationCode: String): RequestResult<SessionMetadata, SubmitVerificationCodeError>
 
+  /** Starts the local Android-ID/Keystore challenge flow for managed LAN deployments. */
+  suspend fun createLocalDeviceAuthChallenge(
+    e164: String,
+    androidId: String,
+    publicKey: String
+  ): RequestResult<org.signal.network.api.RegistrationApiV2.LocalAuthChallengeResponse, org.signal.network.api.RegistrationApiV2.LocalAuthError> {
+    throw UnsupportedOperationException("Local device authentication is not configured")
+  }
+
+  /** Verifies a server challenge with the device's Android Keystore signature. */
+  suspend fun verifyLocalDeviceAuthChallenge(
+    challengeId: String,
+    signature: String
+  ): RequestResult<org.signal.network.api.RegistrationApiV2.LocalAuthCodeResponse, org.signal.network.api.RegistrationApiV2.LocalAuthError> {
+    throw UnsupportedOperationException("Local device authentication is not configured")
+  }
+
+  /** Submits the code delivered in the authenticated LAN response. */
+  suspend fun submitLocalDeviceAuthCode(
+    e164: String,
+    registrationSessionId: String,
+    code: String
+  ): RequestResult<org.signal.network.api.RegistrationApiV2.LocalAuthCodeAcceptedResponse, org.signal.network.api.RegistrationApiV2.LocalAuthError> {
+    throw UnsupportedOperationException("Local device authentication is not configured")
+  }
+
+  /** Returns and consumes a locally delivered registration code, if the active flow used local auth. */
+  fun consumeLocalAuthCode(registrationSessionId: String): String? = null
+
+  /** Returns true for a registration session owned by the local-auth flow. */
+  fun isLocalAuthSession(registrationSessionId: String): Boolean = false
+
   /**
    * Officially register an account.
    * Must provide exactly one of [sessionId], [recoveryPassword], or [receiptCredentialPresentation].
