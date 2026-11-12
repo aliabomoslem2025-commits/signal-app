@@ -138,6 +138,11 @@
             android:theme="@style/TextSecure.DarkNoActionBar" />
 
         <activity
+            android:name=".registration.localauth.LocalNetworkSettingsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".DeviceProvisioningActivity"
             android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
             android:exported="true">
