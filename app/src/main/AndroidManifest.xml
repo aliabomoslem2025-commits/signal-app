@@ -1649,5 +1649,10 @@
             android:name=".registration.local.LocalServerSettingsActivity"
             android:exported="false"
             android:label="Local server settings" />
+
+        <activity
+            android:name=".registration.local.LocalPinUnlockActivity"
+            android:exported="false"
+            android:label="Unlock app" />
     </application>
 </manifest>
