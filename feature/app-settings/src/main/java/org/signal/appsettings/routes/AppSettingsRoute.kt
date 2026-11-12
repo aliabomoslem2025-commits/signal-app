@@ -124,6 +124,10 @@ sealed interface AppSettingsRoute : Parcelable, DetailNavKey {
   @Serializable
   data object AppUpdates : AppSettingsRoute
 
+  /** Local Signal server endpoints and device-enrollment information for private LAN deployments. */
+  @Serializable
+  data object LocalNetwork : AppSettingsRoute
+
   @Serializable
   @Parcelize
   sealed interface StoriesRoute : AppSettingsRoute {
