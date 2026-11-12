@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="LocalNetworkSettings__title">Local server and device</string>
+    <string name="LocalNetworkSettings__summary">Configure LAN service addresses and copy this device's enrollment key</string>
     <!-- RegistrationLockV2Dialog -->
     <string name="RegistrationLockV2Dialog_turn_on_registration_lock">Turn on Registration Lock?</string>
     <string name="RegistrationLockV2Dialog_turn_off_registration_lock">Turn off Registration Lock?</string>
