@@ -2,11 +2,16 @@ package org.thoughtcrime.securesms.registration.local
 
 import android.content.Context
 import android.util.Base64
+import org.thoughtcrime.securesms.push.LocalServerTrustStore
 import org.json.JSONObject
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.registration.LocalAuthCodeBus
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import java.security.KeyStore
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.Dispatchers
@@ -109,10 +114,29 @@ class LocalDeviceAuthClient(context: Context) {
     return JSONObject(String(bytes, StandardCharsets.UTF_8))
   }
 
+  private fun configureLanTrust(connection: HttpsURLConnection) {
+    val trustStore = LocalServerTrustStore(appContext)
+    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+    trustStore.getKeyStoreInputStream().use { input ->
+      keyStore.load(input, trustStore.getKeyStorePassword().toCharArray())
+    }
+    val trustManagers = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
+      init(keyStore)
+    }
+    val sslContext = SSLContext.getInstance("TLS").apply {
+      init(null, trustManagers.trustManagers, null)
+    }
+    connection.sslSocketFactory = sslContext.socketFactory
+    // Keep the platform's default hostname verifier; never accept a certificate for another host.
+  }
+
   private fun post(path: String, body: JSONObject): JSONObject {
     val base = config.localAuthApiUrl
     val url = URL(base + path)
     val connection = (url.openConnection() as HttpURLConnection).apply {
+      if (this is HttpsURLConnection) {
+        configureLanTrust(this)
+      }
       requestMethod = "POST"
       connectTimeout = 8_000
       readTimeout = 8_000
