@@ -29,6 +29,7 @@ import org.thoughtcrime.securesms.banner.BannerManager
 import org.thoughtcrime.securesms.banner.banners.DeprecatedBuildBanner
 import org.thoughtcrime.securesms.banner.banners.UnauthorizedBanner
 import org.thoughtcrime.securesms.components.settings.app.subscription.BadgeImageMedium
+import org.thoughtcrime.securesms.registration.local.LocalServerSettingsActivity
 import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.recipients.rememberRecipientField
 import org.thoughtcrime.securesms.util.CommunicationActions
@@ -60,6 +61,7 @@ fun AppSettingsEntry(
   CollectActions(viewModel.actions) { action ->
     when (action) {
       AppSettingsAction.OpenDonateUrl -> CommunicationActions.openBrowserLink(context, donateUrl)
+      AppSettingsAction.OpenLocalServerSettings -> context.startActivity(Intent(context, LocalServerSettingsActivity::class.java))
     }
   }
 
