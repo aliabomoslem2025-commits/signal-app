@@ -374,14 +374,20 @@ object RegistrationRepository {
   }
 
   /**
-   * Asks the service to send a verification code through one of our supported channels (SMS, phone call).
+   * Legacy SMS/voice verification is intentionally disabled for this LAN deployment.
+   * Registration must go through the enrolled-device challenge implemented by AppRegistrationNetworkController.
    */
-  suspend fun requestSmsCode(context: Context, sessionId: String, e164: String, password: String, mode: E164VerificationMode): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
-    val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
-
-    val codeRequestResult = api.requestSmsVerificationCode(sessionId, Locale.getDefault(), mode.isSmsRetrieverSupported, mode.transport)
-
-    return@withContext VerificationCodeRequestResult.from(codeRequestResult)
+  @Deprecated("SMS and voice verification have been removed. Use the LAN device-auth registration flow.")
+  suspend fun requestSmsCode(
+    context: Context,
+    sessionId: String,
+    e164: String,
+    password: String,
+    mode: E164VerificationMode
+  ): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
+    VerificationCodeRequestResult.UnknownError(
+      UnsupportedOperationException("SMS and voice verification are disabled; use the enrolled LAN device.")
+    )
   }
 
   /**
