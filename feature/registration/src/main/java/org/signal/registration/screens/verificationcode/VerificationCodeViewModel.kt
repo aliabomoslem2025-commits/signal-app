@@ -205,7 +205,9 @@ class VerificationCodeViewModel(
     return state.copy(
       sessionMetadata = parentState.sessionMetadata,
       e164 = parentState.sessionE164,
-      rateLimits = rateLimits
+      rateLimits = rateLimits,
+      isLocalAuth = parentState.sessionMetadata.id.startsWith("local:") ||
+        repository.isLocalAuthSession(parentState.sessionMetadata.id)
     )
   }
 
