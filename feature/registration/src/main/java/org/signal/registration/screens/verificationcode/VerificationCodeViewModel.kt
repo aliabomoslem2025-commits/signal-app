@@ -35,6 +35,7 @@ import org.signal.network.api.RegistrationApiV2.SubmitVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.VerificationCodeTransport
 import org.signal.registration.PendingRestoreOption
 import org.signal.registration.RegistrationFlowEvent
+import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
 import org.signal.registration.RegistrationRoute
@@ -131,6 +132,16 @@ class VerificationCodeViewModel(
     viewModelScope.launch {
       smsCodeEvents.collect { code ->
         onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+      }
+    }
+
+    viewModelScope.launch {
+      LocalAuthCodeBus.codes.collect { event ->
+        if (_state.value.sessionMetadata?.id == event.challengeSessionId) {
+          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(event.value))
+        } else {
+          Log.d(TAG, "Ignoring a local verification code for a stale registration challenge.")
+        }
       }
     }
   }
