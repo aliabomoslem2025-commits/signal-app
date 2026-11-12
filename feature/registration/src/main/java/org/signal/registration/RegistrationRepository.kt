@@ -202,6 +202,10 @@ class RegistrationRepository(
    * @return whether the Play Services SMS retriever was successfully started.
    */
   suspend fun registerSmsListener(): Boolean {
+    if (networkController.isLocalAuthEnabled()) {
+      Log.d(TAG, "Skipping SMS Retriever because LAN device authentication is active.")
+      return false
+    }
     Log.d(TAG, "Attempting to start verification code SMS retriever.")
     val started = withTimeoutOrNull(5.seconds.inWholeMilliseconds) {
       try {
