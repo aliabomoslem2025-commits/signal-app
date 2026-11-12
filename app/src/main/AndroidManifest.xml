@@ -1645,5 +1645,9 @@
 
         </provider>
 
+        <activity
+            android:name=".registration.local.LocalServerSettingsActivity"
+            android:exported="false"
+            android:label="Local server settings" />
     </application>
 </manifest>
