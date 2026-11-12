@@ -22,9 +22,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.signal.core.ui.compose.EventDrivenViewModel
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.net.RequestResult
@@ -129,16 +131,30 @@ class VerificationCodeViewModel(
       }
       .launchIn(viewModelScope)
 
-    viewModelScope.launch {
-      smsCodeEvents.collect { code ->
-        onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+    if (!repository.isLocalAuthEnabled()) {
+      viewModelScope.launch {
+        smsCodeEvents.collect { code ->
+          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+        }
       }
     }
 
     viewModelScope.launch {
       LocalAuthCodeBus.codes.collect { event ->
-        if (_state.value.sessionMetadata?.id == event.challengeSessionId) {
-          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(event.value))
+        // The one-shot code may arrive before the phone-number screen has navigated to this screen.
+        // Wait for this exact registration session rather than dropping a valid code on a scheduling race.
+        val matchingParent = withTimeoutOrNull(10.seconds) {
+          parentState.first { it.sessionMetadata?.id == event.challengeSessionId }
+        }
+        if (matchingParent != null) {
+          val matchingState = withTimeoutOrNull(5.seconds) {
+            state.first { it.sessionMetadata?.id == event.challengeSessionId }
+          }
+          if (matchingState != null) {
+            onEvent(VerificationCodeScreenEvents.CodeAutoFilled(event.value))
+          } else {
+            Log.w(TAG, "Timed out waiting for the local verification session to become active.")
+          }
         } else {
           Log.d(TAG, "Ignoring a local verification code for a stale registration challenge.")
         }
