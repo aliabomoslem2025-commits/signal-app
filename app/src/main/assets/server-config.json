@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "environment": "LAN",
+  "apiBaseUrl": "https://messenger.lan",
+  "websocketBaseUrl": "wss://messenger.lan",
+  "modules": {
+    "cdn0": "https://cdn0.messenger.lan",
+    "cdn2": "https://cdn2.messenger.lan",
+    "cdn3": "https://cdn3.messenger.lan",
+    "storage": "https://storage.messenger.lan",
+    "cdsi": "https://cdsi.messenger.lan",
+    "svr2": "https://svr2.messenger.lan",
+    "svrb": "https://svrb.messenger.lan",
+    "attachments": "https://attachments.messenger.lan",
+    "sfu": "https://sfu.messenger.lan",
+    "turn": "turn:turn.messenger.lan:3478"
+  },
+  "authentication": {
+    "mode": "LOCAL_DEVICE_AUTH",
+    "smsEnabled": false
+  },
+  "security": {
+    "allowCleartext": false,
+    "validateCertificates": true
+  }
+}

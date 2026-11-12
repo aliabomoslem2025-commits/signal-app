@@ -273,6 +273,68 @@ class RegistrationApiV2(
     )
   }
 
+  /** Request a signed challenge for an administrator-preauthorized LAN device. */
+  suspend fun createLocalDeviceAuthChallenge(
+    phoneNumber: String,
+    androidId: String,
+    publicKey: String
+  ): RequestResult<LocalAuthChallengeResponse, LocalAuthError> {
+    val result = restClient.request(
+      RequestSpec(
+        method = RequestSpec.Method.POST,
+        host = RequestSpec.Host.Service,
+        path = "/v1/local-auth/challenge",
+        body = LocalAuthChallengeRequest(phoneNumber, androidId).toJsonRequestBody()
+      )
+    )
+
+    return result.toTypedResult(
+      parseSuccess = { SignalJson.json.decodeFromString<LocalAuthChallengeResponse>(it.bodyString()) },
+      mapError = { error -> LocalAuthError.Remote(error.statusCode, error.bodyString()) }
+    )
+  }
+
+  /** Redeem the challenge with the Android Keystore signature. */
+  suspend fun verifyLocalDeviceAuthChallenge(
+    challengeId: String,
+    signature: String
+  ): RequestResult<LocalAuthCodeResponse, LocalAuthError> {
+    val result = restClient.request(
+      RequestSpec(
+        method = RequestSpec.Method.POST,
+        host = RequestSpec.Host.Service,
+        path = "/v1/local-auth/verify",
+        body = LocalAuthVerifyRequest(challengeId, signature).toJsonRequestBody()
+      )
+    )
+
+    return result.toTypedResult(
+      parseSuccess = { SignalJson.json.decodeFromString<LocalAuthCodeResponse>(it.bodyString()) },
+      mapError = { error -> LocalAuthError.Remote(error.statusCode, error.bodyString()) }
+    )
+  }
+
+  /** Submit the locally returned code; no SMS or voice transport is involved. */
+  suspend fun submitLocalDeviceAuthCode(
+    phoneNumber: String,
+    registrationSessionId: String,
+    code: String
+  ): RequestResult<LocalAuthCodeAcceptedResponse, LocalAuthError> {
+    val result = restClient.request(
+      RequestSpec(
+        method = RequestSpec.Method.POST,
+        host = RequestSpec.Host.Service,
+        path = "/v1/local-auth/submit-code",
+        body = LocalAuthSubmitCodeRequest(phoneNumber, registrationSessionId, code).toJsonRequestBody()
+      )
+    )
+
+    return result.toTypedResult(
+      parseSuccess = { SignalJson.json.decodeFromString<LocalAuthCodeAcceptedResponse>(it.bodyString()) },
+      mapError = { error -> LocalAuthError.Remote(error.statusCode, error.bodyString()) }
+    )
+  }
+
   /**
    * Submit the cryptographic assets required for an account to use the service.
    * Must provide exactly one of [sessionId], [recoveryPassword], or [receiptCredentialPresentation].
@@ -637,6 +699,28 @@ class RegistrationApiV2(
 
   private fun KyberPreKeyRecord.toKyberPreKeyEntity(): KyberPreKeyEntity {
     return KyberPreKeyEntity(id.toLong(), keyPair.publicKey, signature)
+  }
+
+  @Serializable
+  data class LocalAuthChallengeRequest(val phoneNumber: String, val androidId: String)
+
+  @Serializable
+  data class LocalAuthChallengeResponse(val challengeId: String, val nonce: String, val expiresAt: Long)
+
+  @Serializable
+  data class LocalAuthVerifyRequest(val challengeId: String, val signature: String)
+
+  @Serializable
+  data class LocalAuthCodeResponse(val code: String, val registrationSessionId: String, val expiresInSeconds: Long)
+
+  @Serializable
+  data class LocalAuthSubmitCodeRequest(val phoneNumber: String, val registrationSessionId: String, val code: String)
+
+  @Serializable
+  data class LocalAuthCodeAcceptedResponse(val verified: Boolean)
+
+  sealed class LocalAuthError : BadRequestError {
+    data class Remote(val statusCode: Int, val message: String) : LocalAuthError()
   }
 
   @Serializable

@@ -205,7 +205,9 @@ class VerificationCodeViewModel(
     return state.copy(
       sessionMetadata = parentState.sessionMetadata,
       e164 = parentState.sessionE164,
-      rateLimits = rateLimits
+      rateLimits = rateLimits,
+      isLocalAuth = parentState.sessionMetadata.id.startsWith("local:") ||
+        repository.isLocalAuthSession(parentState.sessionMetadata.id)
     )
   }
 
@@ -422,10 +424,12 @@ class VerificationCodeViewModel(
       return state
     }
 
+    // LAN registration receives the one-time code inside the authenticated HTTPS response.
+    // Never start Android SMS Retriever or request an SMS/voice transport.
     val result = repository.requestVerificationCode(
       sessionId = state.sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
-      transport = transport
+      smsAutoRetrieveCodeSupported = false,
+      transport = VerificationCodeTransport.SMS
     )
 
     return when (result) {
@@ -433,10 +437,18 @@ class VerificationCodeViewModel(
         Log.i(TAG, "[RequestCode][$transport] Successfully requested verification code.")
         parentEventEmitter(RegistrationFlowEvent.VerificationCodeRequested.from(state.e164, transport, result.result, clock()))
         parentEventEmitter(RegistrationFlowEvent.SessionUpdated(result.result))
-        state.copy(
+        val updatedState = state.copy(
           sessionMetadata = result.result,
           rateLimits = computeRateLimits(result.result)
         )
+        repository.consumeLocalAuthCode(result.result.id)?.let { localCode ->
+          // Let processEvent publish the new session ID before the code-entry presenter emits CodeEntered.
+          viewModelScope.launch {
+            delay(1)
+            codeEntryPresenter.onEvent(CodeEntryFieldEvents.SetCode(localCode))
+          }
+        }
+        updatedState
       }
       is RequestResult.NonSuccess -> {
         when (val error = result.error) {

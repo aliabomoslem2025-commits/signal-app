@@ -1,5 +1,7 @@
 package org.thoughtcrime.securesms.push
 
+import org.thoughtcrime.securesms.registration.localauth.LocalServerConfigStore
+
 import android.content.Context
 import android.os.SystemClock
 import com.google.i18n.phonenumbers.PhoneNumberUtil
@@ -144,6 +146,7 @@ class SignalServiceNetworkAccess(context: Context) {
   }
 
   private val serviceTrustStore: TrustStore = SignalServiceTrustStore(context)
+  private val localServerConfig = LocalServerConfigStore.load(context)
   private val gTrustStore: TrustStore = DomainFrontingTrustStore(context)
   private val fTrustStore: TrustStore = DomainFrontingDigicertTrustStore(context)
 
@@ -260,15 +263,15 @@ class SignalServiceNetworkAccess(context: Context) {
   )
 
   val uncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
-    signalServiceUrls = arrayOf(SignalServiceUrl(BuildConfig.SIGNAL_URL, serviceTrustStore)),
+    signalServiceUrls = arrayOf(SignalServiceUrl(localServerConfig.apiBaseUrl, serviceTrustStore)),
     signalCdnUrlMap = mapOf(
-      0 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN_URL, serviceTrustStore)),
-      2 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN2_URL, serviceTrustStore)),
-      3 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN3_URL, serviceTrustStore))
+      0 to arrayOf(SignalCdnUrl(localServerConfig.cdn0, serviceTrustStore)),
+      2 to arrayOf(SignalCdnUrl(localServerConfig.cdn2, serviceTrustStore)),
+      3 to arrayOf(SignalCdnUrl(localServerConfig.cdn3, serviceTrustStore))
     ),
-    signalStorageUrls = arrayOf(SignalStorageUrl(BuildConfig.STORAGE_URL, serviceTrustStore)),
-    signalCdsiUrls = arrayOf(SignalCdsiUrl(BuildConfig.SIGNAL_CDSI_URL, serviceTrustStore)),
-    signalSvr2Urls = arrayOf(SignalSvr2Url(BuildConfig.SIGNAL_SVR2_URL, serviceTrustStore)),
+    signalStorageUrls = arrayOf(SignalStorageUrl(localServerConfig.storage, serviceTrustStore)),
+    signalCdsiUrls = arrayOf(SignalCdsiUrl(localServerConfig.cdsi, serviceTrustStore)),
+    signalSvr2Urls = arrayOf(SignalSvr2Url(localServerConfig.svr2, serviceTrustStore)),
     networkInterceptors = interceptors + directFetchFailureInterceptor,
     dns = Optional.of(DNS),
     signalProxy = if (SignalStore.proxy.isProxyEnabled) Optional.ofNullable(SignalStore.proxy.proxy) else Optional.empty(),
