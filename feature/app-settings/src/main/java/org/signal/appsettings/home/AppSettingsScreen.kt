@@ -75,6 +75,7 @@ object AppSettingsTestTags {
   const val ROW_BACKUPS = "row-backups"
   const val ROW_DATA_AND_STORAGE = "row-data-and-storage"
   const val ROW_APP_UPDATES = "row-app-updates"
+  const val ROW_LOCAL_NETWORK = "row-local-network"
   const val ROW_PAYMENTS = "row-payments"
   const val ROW_HELP = "row-help"
   const val ROW_INVITE = "row-invite"
@@ -309,6 +310,18 @@ fun AppSettingsScreen(
                 .testTag(AppSettingsTestTags.ROW_APP_UPDATES)
             )
           }
+        }
+
+        item {
+          Rows.TextRow(
+            text = stringResource(R.string.LocalNetworkSettings__title),
+            label = stringResource(R.string.LocalNetworkSettings__summary),
+            icon = SignalIcons.Devices.painter,
+            onClick = { onEvent(AppSettingsEvent.LocalNetworkClicked) },
+            modifier = Modifier
+              .selectionHighlight(selectedRoute == AppSettingsRoute.LocalNetwork)
+              .testTag(AppSettingsTestTags.ROW_LOCAL_NETWORK)
+          )
         }
 
         if (state.isPrimaryDevice && state.showPayments) {
