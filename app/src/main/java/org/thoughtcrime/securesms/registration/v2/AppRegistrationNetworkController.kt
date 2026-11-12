@@ -5,6 +5,9 @@
 
 package org.thoughtcrime.securesms.registration.v2
 
+import org.thoughtcrime.securesms.registration.localauth.LocalAuthPendingStore
+import org.thoughtcrime.securesms.registration.localauth.LocalDeviceKeyManager
+
 import android.content.Context
 import arrow.core.Either
 import kotlinx.coroutines.CancellationException
@@ -146,16 +149,68 @@ class AppRegistrationNetworkController(
     private val RETRY_BACKOFF = 5.seconds
   }
 
+  private val localAuthPendingStore = LocalAuthPendingStore(context)
+  private val localAuthChallengePrefix = "local:"
+
   override suspend fun createSession(
     e164: String,
     fcmToken: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
-    return registrationApi.createVerificationSession(e164, fcmToken, mcc, mnc)
+    return try {
+      val identity = LocalDeviceKeyManager.getOrCreateIdentity(context)
+      when (val result = registrationApi.createLocalDeviceAuthChallenge(e164, identity.androidId, identity.publicKeyBase64)) {
+        is RequestResult.Success -> {
+          localAuthPendingStore.saveChallenge(result.result.challengeId, e164, result.result.nonce)
+          RequestResult.Success(
+            SessionMetadata(
+              id = localAuthChallengePrefix + result.result.challengeId,
+              nextSms = null,
+              nextCall = null,
+              nextVerificationAttempt = null,
+              allowedToRequestCode = true,
+              requestedInformation = emptyList(),
+              verified = false
+            )
+          )
+        }
+        is RequestResult.NonSuccess -> RequestResult.NonSuccess(CreateSessionError.InvalidRequest(result.error.toString()))
+        is RequestResult.RetryableNetworkError -> result
+        is RequestResult.ApplicationError -> result
+      }
+    } catch (e: Exception) {
+      RequestResult.ApplicationError(e)
+    }
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
+    if (sessionId.startsWith(localAuthChallengePrefix)) {
+      return RequestResult.Success(
+        SessionMetadata(
+          id = sessionId,
+          nextSms = null,
+          nextCall = null,
+          nextVerificationAttempt = null,
+          allowedToRequestCode = true,
+          requestedInformation = emptyList(),
+          verified = false
+        )
+      )
+    }
+    if (localAuthPendingStore.phoneForSession(sessionId) != null) {
+      return RequestResult.Success(
+        SessionMetadata(
+          id = sessionId,
+          nextSms = null,
+          nextCall = null,
+          nextVerificationAttempt = null,
+          allowedToRequestCode = false,
+          requestedInformation = emptyList(),
+          verified = localAuthPendingStore.isVerified(sessionId)
+        )
+      )
+    }
     return registrationApi.getSessionStatus(sessionId)
   }
 
@@ -177,14 +232,89 @@ class AppRegistrationNetworkController(
     androidSmsRetrieverSupported: Boolean,
     transport: VerificationCodeTransport
   ): RequestResult<SessionMetadata, RequestVerificationCodeError> {
-    return registrationApi.requestVerificationCode(sessionId, locale, androidSmsRetrieverSupported, transport)
+    if (!sessionId.startsWith(localAuthChallengePrefix)) {
+      return RequestResult.NonSuccess(
+        RequestVerificationCodeError.InvalidRequest("Only the local device-auth flow is enabled in this build")
+      )
+    }
+
+    val challengeId = sessionId.removePrefix(localAuthChallengePrefix)
+    val nonce = localAuthPendingStore.nonceForChallenge(challengeId)
+      ?: return RequestResult.NonSuccess(RequestVerificationCodeError.InvalidSessionId("Local challenge is missing or expired"))
+    val phoneNumber = localAuthPendingStore.phoneForChallenge(challengeId)
+      ?: return RequestResult.NonSuccess(RequestVerificationCodeError.InvalidSessionId("Local challenge is missing or expired"))
+
+    return try {
+      val signature = LocalDeviceKeyManager.signChallenge(context, nonce)
+      when (val result = registrationApi.verifyLocalDeviceAuthChallenge(challengeId, signature)) {
+        is RequestResult.Success -> {
+          localAuthPendingStore.clearChallenge(challengeId)
+          localAuthPendingStore.saveRegistrationSession(
+            result.result.registrationSessionId,
+            phoneNumber,
+            result.result.code
+          )
+          RequestResult.Success(
+            SessionMetadata(
+              id = result.result.registrationSessionId,
+              nextSms = null,
+              nextCall = null,
+              nextVerificationAttempt = null,
+              allowedToRequestCode = false,
+              requestedInformation = emptyList(),
+              verified = false
+            )
+          )
+        }
+        is RequestResult.NonSuccess -> RequestResult.NonSuccess(
+          RequestVerificationCodeError.InvalidRequest(result.error.toString())
+        )
+        is RequestResult.RetryableNetworkError -> result
+        is RequestResult.ApplicationError -> result
+      }
+    } catch (e: Exception) {
+      RequestResult.ApplicationError(e)
+    }
   }
 
   override suspend fun submitVerificationCode(
     sessionId: String,
     verificationCode: String
   ): RequestResult<SessionMetadata, SubmitVerificationCodeError> {
-    return registrationApi.submitVerificationCode(sessionId, verificationCode)
+    val phoneNumber = localAuthPendingStore.phoneForSession(sessionId)
+      ?: return RequestResult.NonSuccess(
+        SubmitVerificationCodeError.InvalidSessionIdOrVerificationCode("Local authentication session was not found")
+      )
+
+    return when (val result = registrationApi.submitLocalDeviceAuthCode(phoneNumber, sessionId, verificationCode)) {
+      is RequestResult.Success -> {
+        localAuthPendingStore.markVerified(sessionId)
+        RequestResult.Success(
+          SessionMetadata(
+            id = sessionId,
+            nextSms = null,
+            nextCall = null,
+            nextVerificationAttempt = null,
+            allowedToRequestCode = false,
+            requestedInformation = emptyList(),
+            verified = result.result.verified
+          )
+        )
+      }
+      is RequestResult.NonSuccess -> RequestResult.NonSuccess(
+        SubmitVerificationCodeError.InvalidSessionIdOrVerificationCode(result.error.toString())
+      )
+      is RequestResult.RetryableNetworkError -> result
+      is RequestResult.ApplicationError -> result
+    }
+  }
+
+  override fun consumeLocalAuthCode(registrationSessionId: String): String? {
+    return localAuthPendingStore.consumeCode(registrationSessionId)
+  }
+
+  override fun isLocalAuthSession(registrationSessionId: String): Boolean {
+    return localAuthPendingStore.phoneForSession(registrationSessionId) != null
   }
 
   override suspend fun registerAccount(
