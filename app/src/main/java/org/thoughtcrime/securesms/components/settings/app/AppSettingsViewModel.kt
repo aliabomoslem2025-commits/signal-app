@@ -95,6 +95,7 @@ class AppSettingsViewModel(
       }
       AppSettingsEvent.DataAndStorageClicked -> parentEventEmitter.openSection(AppSettingsRoute.DataAndStorageRoute.DataAndStorage)
       AppSettingsEvent.AppUpdatesClicked -> parentEventEmitter.openSection(AppSettingsRoute.AppUpdates)
+      AppSettingsEvent.LocalNetworkClicked -> parentEventEmitter.openSection(AppSettingsRoute.LocalNetwork)
       AppSettingsEvent.PaymentsClicked -> parentEventEmitter.openSection(AppSettingsRoute.Payments)
       AppSettingsEvent.HelpClicked -> parentEventEmitter.openSection(AppSettingsRoute.HelpRoute.Settings)
       AppSettingsEvent.InviteClicked -> parentEventEmitter.openSection(AppSettingsRoute.Invite)
