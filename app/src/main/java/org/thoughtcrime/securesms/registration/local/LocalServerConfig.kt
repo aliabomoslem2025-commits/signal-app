@@ -32,13 +32,17 @@ class LocalServerConfig private constructor(
   val localAuthApiUrl: String
     get() = normalizedEndpoint(defaults.optString("localAuthApiUrl"))
 
+  val trustedCaPem: String
+    get() = defaults.optString("trustedCaPem").trim()
+
   fun endpoint(module: String): String {
     val services = defaults.optJSONObject("services") ?: JSONObject()
-    return normalizedEndpoint(services.optString(module))
+    val value = services.optString(module)
+    return if (module == "turn") normalizedTurnEndpoint(value) else normalizedEndpoint(value)
   }
 
   fun saveEndpoint(module: String, value: String) {
-    val normalized = normalizedEndpoint(value)
+    val normalized = if (module == "turn") normalizedTurnEndpoint(value) else normalizedEndpoint(value)
     val services = defaults.optJSONObject("services") ?: JSONObject().also {
       defaults.put("services", it)
     }
@@ -48,6 +52,14 @@ class LocalServerConfig private constructor(
 
   fun saveLocalAuthApiUrl(value: String) {
     defaults.put("localAuthApiUrl", normalizedEndpoint(value))
+    persist()
+  }
+
+  fun saveTrustedCaPem(pem: String) {
+    require(pem.contains("-----BEGIN CERTIFICATE-----") && pem.contains("-----END CERTIFICATE-----")) {
+      "A PEM-encoded X.509 CA certificate is required"
+    }
+    defaults.put("trustedCaPem", pem.trim())
     persist()
   }
 
@@ -64,12 +76,19 @@ class LocalServerConfig private constructor(
       "Certificate validation cannot be disabled"
     }
     normalizedEndpoint(parsed.optString("localAuthApiUrl"))
+    if (parsed.optBoolean("localAuthOnly", true)) {
+      val caPem = parsed.optString("trustedCaPem")
+      require(caPem.contains("-----BEGIN CERTIFICATE-----") && caPem.contains("-----END CERTIFICATE-----")) {
+        "Local LAN mode requires trustedCaPem with a private CA certificate"
+      }
+    }
     val services = parsed.optJSONObject("services") ?: JSONObject()
     val names = listOf("signal", "storage", "cdn0", "cdn2", "cdn3", "cdsi", "svr2", "svrb", "attachments", "sfu")
     names.forEach { name ->
       val value = services.optString(name)
       if (value.isNotBlank()) normalizedEndpoint(value)
     }
+    services.optString("turn").takeIf { it.isNotBlank() }?.let(::normalizedTurnEndpoint)
     defaults.keys().asSequence().toList().forEach(defaults::remove)
     parsed.keys().forEach { key -> defaults.put(key, parsed.get(key)) }
     persist()
@@ -80,6 +99,17 @@ class LocalServerConfig private constructor(
       .edit()
       .putString(KEY_CONFIG, defaults.toString())
       .apply()
+  }
+
+  private fun normalizedTurnEndpoint(value: String): String {
+    val trimmed = value.trim()
+    val uri = java.net.URI(trimmed)
+    val scheme = uri.scheme?.lowercase()
+    require(scheme == "turn" || scheme == "turns") { "TURN endpoint must use turn: or turns:" }
+    require(uri.host != null && uri.userInfo == null && uri.query == null && uri.fragment == null) {
+      "Invalid TURN endpoint"
+    }
+    return trimmed
   }
 
   private fun normalizedEndpoint(value: String): String {
