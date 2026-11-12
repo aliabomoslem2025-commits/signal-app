@@ -1,6 +1,7 @@
 package org.thoughtcrime.securesms.registration.localauth
 
 import android.content.ClipData
+import android.app.AlertDialog
 import android.content.ClipboardManager
 import android.os.Bundle
 import android.text.InputType
@@ -87,6 +88,59 @@ class LocalNetworkSettingsActivity : PassphraseRequiredActivity() {
       LocalServerConfigStore.reset(this)
       configEditor.setText(LocalServerConfigStore.readRawJson(this))
       Toast.makeText(this, "Packaged LAN template restored. Restart Signal to apply it.", Toast.LENGTH_LONG).show()
+    })
+
+    content.addView(text("Application PIN", 18f))
+    content.addView(text(
+      "This optional PIN locks the app when it returns from the background. It is stored and verified locally and is not your Signal account/SVR PIN."
+    ))
+    val newPin = EditText(this).apply {
+      inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+      hint = "New 6–12 digit app PIN"
+    }
+    val confirmPin = EditText(this).apply {
+      inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+      hint = "Confirm app PIN"
+    }
+    content.addView(newPin)
+    content.addView(confirmPin)
+    content.addView(button("Set or change app PIN") {
+      val first = newPin.text?.toString().orEmpty()
+      val second = confirmPin.text?.toString().orEmpty()
+      if (first != second) {
+        Toast.makeText(this, "PIN values do not match.", Toast.LENGTH_SHORT).show()
+      } else if (!LocalAppPinManager.setPin(this, first)) {
+        Toast.makeText(this, "PIN must contain 6–12 digits.", Toast.LENGTH_LONG).show()
+      } else {
+        newPin.text?.clear()
+        confirmPin.text?.clear()
+        Toast.makeText(this, "Local app PIN enabled.", Toast.LENGTH_SHORT).show()
+      }
+    })
+    content.addView(button("Disable app PIN") {
+      val currentPin = EditText(this).apply {
+        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        hint = "Current app PIN"
+      }
+      val dialog = AlertDialog.Builder(this)
+        .setTitle("Disable local app PIN")
+        .setView(currentPin)
+        .setNegativeButton("Cancel", null)
+        .setPositiveButton("Disable", null)
+        .create()
+      dialog.setOnShowListener {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+          val current = currentPin.text?.toString().orEmpty()
+          if (LocalAppPinManager.disable(this, current)) {
+            dialog.dismiss()
+            Toast.makeText(this, "Local app PIN disabled.", Toast.LENGTH_SHORT).show()
+          } else {
+            currentPin.text?.clear()
+            Toast.makeText(this, "PIN is incorrect or the account is temporarily locked.", Toast.LENGTH_LONG).show()
+          }
+        }
+      }
+      dialog.show()
     })
 
     content.addView(text("Enroll this Android device", 18f))
