@@ -333,6 +333,9 @@ private fun CodeField(state: VerificationCodeState, onEvent: (VerificationCodeSc
 
 @Composable
 private fun AlternateCodeOptions(state: VerificationCodeState, onEvent: (VerificationCodeScreenEvents) -> Unit) {
+  if (state.isLocalAuth) {
+    return
+  }
   val disabledColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
   val canResendSms = state.canResendSms()
@@ -395,7 +398,11 @@ private fun Description(state: VerificationCodeState, onEvent: (VerificationCode
   )
 
   Text(
-    text = stringResource(R.string.VerificationCodeScreen__enter_the_code_we_sent_to_s, state.e164),
+    text = if (state.isLocalAuth) {
+      stringResource(R.string.VerificationCodeScreen__enter_code_from_local_server)
+    } else {
+      stringResource(R.string.VerificationCodeScreen__enter_the_code_we_sent_to_s, state.e164)
+    },
     style = if (twoPane) MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.bodyLarge,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
     modifier = Modifier.padding(top = 16.dp)
