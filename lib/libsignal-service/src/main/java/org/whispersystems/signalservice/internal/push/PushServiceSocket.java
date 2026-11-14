@@ -255,8 +255,8 @@ public class PushServiceSocket {
     return credentialsProvider;
   }
 
-  public RegistrationSessionMetadataResponse createVerificationSession(@Nullable String pushToken, @Nullable String mcc, @Nullable String mnc) throws IOException {
-    final String jsonBody = JsonUtil.toJson(new VerificationSessionMetadataRequestBody(credentialsProvider.getE164(), pushToken, mcc, mnc));
+  public RegistrationSessionMetadataResponse createVerificationSession(@Nullable String mcc, @Nullable String mnc) throws IOException {
+    final String jsonBody = JsonUtil.toJson(new VerificationSessionMetadataRequestBody(credentialsProvider.getE164(), mcc, mnc));
     try (Response response = makeServiceRequest(VERIFICATION_SESSION_PATH, "POST", jsonRequestBody(jsonBody), NO_HEADERS, new RegistrationSessionResponseHandler(), SealedSenderAccess.NONE, false)) {
       return parseSessionMetadataResponse(response);
     }
@@ -270,10 +270,10 @@ public class PushServiceSocket {
     }
   }
 
-  public RegistrationSessionMetadataResponse patchVerificationSession(String sessionId, @Nullable String pushToken, @Nullable String mcc, @Nullable String mnc, @Nullable String captchaToken, @Nullable String pushChallengeToken) throws IOException {
+  public RegistrationSessionMetadataResponse patchVerificationSession(String sessionId, @Nullable String mcc, @Nullable String mnc, @Nullable String captchaToken) throws IOException {
     String path = VERIFICATION_SESSION_PATH + "/" + sessionId;
 
-    final UpdateVerificationSessionRequestBody requestBody = new UpdateVerificationSessionRequestBody(captchaToken, pushToken, pushChallengeToken, mcc, mnc);
+    final UpdateVerificationSessionRequestBody requestBody = new UpdateVerificationSessionRequestBody(captchaToken, mcc, mnc);
     try (Response response = makeServiceRequest(path, "PATCH", jsonRequestBody(JsonUtil.toJson(requestBody)), NO_HEADERS, new PatchRegistrationSessionResponseHandler(), SealedSenderAccess.NONE, false)) {
       return parseSessionMetadataResponse(response);
     }
@@ -309,7 +309,7 @@ public class PushServiceSocket {
     }
   }
 
-  public VerifyAccountResponse submitRegistrationRequest(@Nullable String sessionId, @Nullable String recoveryPassword, AccountAttributes attributes, PreKeyCollection aciPreKeys, PreKeyCollection pniPreKeys, @Nullable String fcmToken, boolean skipDeviceTransfer) throws IOException {
+  public VerifyAccountResponse submitRegistrationRequest(@Nullable String sessionId, @Nullable String recoveryPassword, AccountAttributes attributes, PreKeyCollection aciPreKeys, PreKeyCollection pniPreKeys, boolean skipDeviceTransfer) throws IOException {
     String path = REGISTRATION_PATH;
     if (sessionId == null && recoveryPassword == null) {
       throw new IllegalArgumentException("Neither Session ID nor Recovery Password provided.");
@@ -317,13 +317,6 @@ public class PushServiceSocket {
 
     if (sessionId != null && recoveryPassword != null) {
       throw new IllegalArgumentException("You must supply one and only one of either: Session ID, or Recovery Password.");
-    }
-
-    GcmRegistrationId gcmRegistrationId;
-    if (attributes.getFetchesMessages()) {
-      gcmRegistrationId = null;
-    } else {
-      gcmRegistrationId = new GcmRegistrationId(fcmToken, true);
     }
 
     RegistrationSessionRequestBody body;
@@ -350,7 +343,6 @@ public class PushServiceSocket {
                                                 pniSignedPreKey,
                                                 aciLastResortKyberPreKey,
                                                 pniLastResortKyberPreKey,
-                                                gcmRegistrationId,
                                                 skipDeviceTransfer,
                                                 true);
     } catch (InvalidKeyException e) {
@@ -364,10 +356,6 @@ public class PushServiceSocket {
   public void setRestoreMethodChosen(@Nonnull String token, @Nonnull RestoreMethodBody request) throws IOException {
     String body = JsonUtil.toJson(request);
     makeServiceRequest(String.format(Locale.US, SET_RESTORE_METHOD_PATH, urlEncode(token)), "PUT", body, NO_HEADERS, UNOPINIONATED_HANDLER, SealedSenderAccess.NONE);
-  }
-
-  public void requestPushChallenge(String sessionId, String gcmRegistrationId) throws IOException {
-    patchVerificationSession(sessionId, gcmRegistrationId, null, null, null, null);
   }
 
   public RegisterAsSecondaryDeviceResponse registerAsSecondaryDevice(RegisterAsSecondaryDeviceRequest request) throws IOException {
