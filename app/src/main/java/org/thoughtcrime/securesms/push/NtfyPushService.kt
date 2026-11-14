@@ -48,8 +48,11 @@ class NtfyPushService : Service() {
     private val TAG = Log.tag(NtfyPushService::class.java)
     private const val PREFS = "ntfy_push_state"
     private const val LAST_MESSAGE_ID = "last_message_id"
+    private const val LAST_TOPIC = "last_topic"
     private const val KEEP_ALIVE_TOKEN = "NtfyPush"
     private const val CONNECT_TIMEOUT_MS = 10_000
+    // ntfy sends periodic keepalives. A bounded read timeout lets us recover from half-open LAN sockets.
+    private const val READ_TIMEOUT_MS = 75_000
     private const val WEBSOCKET_DRAIN_TIMEOUT_MS = 90_000L
     private const val RETRY_MIN_MS = 1_000L
     private const val RETRY_MAX_MS = 60_000L
@@ -63,7 +66,7 @@ class NtfyPushService : Service() {
         Log.w(TAG, "Cannot load LAN push configuration", e)
         return
       }
-      if (!config.isNtfyPushConfigured) return
+      if (!config.localAuthOnly || !config.isNtfyPushConfigured) return
       try {
         ContextCompat.startForegroundService(context, Intent(context, NtfyPushService::class.java))
       } catch (e: Exception) {
@@ -167,6 +170,11 @@ class NtfyPushService : Service() {
     require(topic.matches(Regex("[A-Za-z0-9_-]{32,128}"))) { "Signal Server returned an invalid ntfy topic" }
 
     val preferences = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    val previousTopic = preferences.getString(LAST_TOPIC, null)
+    if (previousTopic != topic) {
+      // A new account/device topic has an independent ntfy message cursor.
+      preferences.edit().remove(LAST_MESSAGE_ID).putString(LAST_TOPIC, topic).commit()
+    }
     val lastId = preferences.getString(LAST_MESSAGE_ID, null)
     val query = if (lastId.isNullOrBlank()) "since=all" else "since=" + Uri.encode(lastId)
     val url = URL(baseUrl.trimEnd('/') + "/" + topic + "/json?" + query)
@@ -175,7 +183,7 @@ class NtfyPushService : Service() {
       if (this is HttpsURLConnection) configureLanTrust(this)
       requestMethod = "GET"
       connectTimeout = CONNECT_TIMEOUT_MS
-      readTimeout = 0
+      readTimeout = READ_TIMEOUT_MS
       setRequestProperty("Authorization", "Bearer " + readerToken)
       setRequestProperty("Accept", "application/x-ndjson")
       setRequestProperty("Cache-Control", "no-cache")
