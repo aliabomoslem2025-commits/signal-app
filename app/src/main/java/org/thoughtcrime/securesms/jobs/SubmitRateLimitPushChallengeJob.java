@@ -16,7 +16,7 @@ import org.whispersystems.signalservice.api.NetworkResultUtil;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Send a push challenge token to the service as a way of proving that your device has FCM.
+ * Send a Signal rate-limit challenge response after the device receives the short-lived token through its configured push channel.
  */
 public final class SubmitRateLimitPushChallengeJob extends BaseJob {
 
