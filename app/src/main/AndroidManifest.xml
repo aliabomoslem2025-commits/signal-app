@@ -1650,5 +1650,12 @@
             android:exported="false"
             android:label="شبکه محلی و احراز هویت"
             android:theme="@style/TextSecure.LightTheme" />
+        <activity
+            android:name=".network.local.LocalAppPinActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="قفل برنامه"
+            android:launchMode="singleTop"
+            android:theme="@style/TextSecure.LightTheme" />
     </application>
 </manifest>
