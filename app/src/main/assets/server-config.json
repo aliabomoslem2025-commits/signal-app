@@ -15,7 +15,9 @@
     "svrb": "https://svrb.messenger.lan",
     "attachments": "https://attachments.messenger.lan",
     "sfu": "https://sfu.messenger.lan",
-    "turn": "turns:turn.messenger.lan:5349"
+    "turn": "turns:turn.messenger.lan:5349",
+    "turnUsername": "",
+    "turnCredential": ""
   },
   "security": {
     "requireHttps": true,
