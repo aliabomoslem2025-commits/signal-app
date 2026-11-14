@@ -1,20 +1,21 @@
 package org.signal.registration
 
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 
 /**
- * One-shot handoff from the app's LAN authentication controller to the verification-code screen.
- * A buffered channel keeps the response if navigation has not created the screen yet.
+ * One-shot in-process handoff for verification codes delivered by the private LAN authentication API.
+ * This is deliberately not persisted and is consumed by the active registration screen only.
  */
 object LocalAuthCodeBus {
-  private val channel = Channel<String>(capacity = Channel.BUFFERED)
+  const val CHALLENGE_SESSION_PREFIX = "LOCAL1."
 
-  val codes: Flow<String> = channel.receiveAsFlow()
+  data class Code(val challengeSessionId: String, val value: String)
 
-  fun offer(code: String) {
-    require(code.length == 6 && code.all(Char::isDigit)) { "Local verification code must contain six digits." }
-    check(channel.trySend(code).isSuccess) { "A local verification code is already pending." }
+  private val channel = Channel<Code>(capacity = Channel.BUFFERED)
+  val codes = channel.receiveAsFlow()
+
+  suspend fun publish(challengeSessionId: String, code: String) {
+    channel.send(Code(challengeSessionId, code))
   }
 }

@@ -12,7 +12,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.content.ContextCompat
-import com.google.android.gms.auth.api.phone.SmsRetriever
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.i18n.phonenumbers.PhoneNumberUtil
 import kotlinx.coroutines.CoroutineScope
@@ -169,11 +168,11 @@ class RegistrationRepository(
     internal const val SIGNAL_LOGIN_PURCHASE_OPTION_ID = "nonumber"
   }
 
+  fun isLocalAuthEnabled(): Boolean = networkController.isLocalAuthEnabled()
+
   suspend fun createSession(e164: String): RequestResult<SessionMetadata, CreateSessionError> = withContext(Dispatchers.IO) {
-    val fcmToken = networkController.getFcmToken()
     networkController.createSession(
       e164 = e164,
-      fcmToken = fcmToken,
       mcc = null,
       mnc = null
     )
@@ -192,35 +191,6 @@ class RegistrationRepository(
     )
   }
 
-  /**
-   * Starts the Play Services SMS retriever so an incoming verification code can be automatically entered.
-   *
-   * The listener [lives for 5 minutes](https://developers.google.com/android/reference/com/google/android/gms/auth/api/phone/SmsRetrieverApi).
-   * Callers should pass the result as `smsAutoRetrieveCodeSupported` when requesting a code so the server formats the
-   * SMS for retrieval.
-   *
-   * @return whether the Play Services SMS retriever was successfully started.
-   */
-  suspend fun registerSmsListener(): Boolean {
-    Log.d(TAG, "Attempting to start verification code SMS retriever.")
-    val started = withTimeoutOrNull(5.seconds.inWholeMilliseconds) {
-      try {
-        SmsRetriever.getClient(context).startSmsRetriever().await()
-        Log.d(TAG, "Successfully started verification code SMS retriever.")
-        true
-      } catch (ex: Exception) {
-        Log.w(TAG, "Could not start verification code SMS retriever due to exception.", ex)
-        false
-      }
-    }
-
-    if (started == null) {
-      Log.w(TAG, "Could not start verification code SMS retriever due to timeout.")
-    }
-
-    return started == true
-  }
-
   fun getCaptchaUrl(): String = networkController.getCaptchaUrl()
 
   suspend fun submitCaptchaToken(
@@ -229,23 +199,7 @@ class RegistrationRepository(
   ): RequestResult<SessionMetadata, UpdateSessionError> = withContext(Dispatchers.IO) {
     networkController.updateSession(
       sessionId = sessionId,
-      pushChallengeToken = null,
       captchaToken = captchaToken
-    )
-  }
-
-  suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
-    networkController.awaitPushChallengeToken()
-  }
-
-  suspend fun submitPushChallengeToken(
-    sessionId: String,
-    pushChallengeToken: String
-  ): RequestResult<SessionMetadata, UpdateSessionError> = withContext(Dispatchers.IO) {
-    networkController.updateSession(
-      sessionId = sessionId,
-      pushChallengeToken = pushChallengeToken,
-      captchaToken = null
     )
   }
 
@@ -943,16 +897,14 @@ class RegistrationRepository(
       }
     }
 
-    val fcmToken = networkController.getFcmToken()
-
     updateAccountData {
-      this.fetchesMessages = fcmToken == null
+      this.fetchesMessages = true
     }
 
     val encryptedDeviceName = DeviceNameCipher.encryptDeviceName(deviceName.toByteArray(StandardCharsets.UTF_8), aciIdentityKeyPair)
 
     val deviceAttributes = DeviceAttributes(
-      fetchesMessages = fcmToken == null,
+      fetchesMessages = true,
       registrationId = keyMaterial.aciRegistrationId,
       pniRegistrationId = keyMaterial.pni?.registrationId,
       name = Base64.encodeWithPadding(encryptedDeviceName),
@@ -980,7 +932,6 @@ class RegistrationRepository(
       deviceAttributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
     )
 
     if (result is RequestResult.Success) {
@@ -1208,10 +1159,8 @@ class RegistrationRepository(
       }
     }
 
-    val fcmToken = networkController.getFcmToken()
-
     updateAccountData {
-      this.fetchesMessages = fcmToken == null
+      this.fetchesMessages = true
     }
 
     val newMasterKey = keyMaterial.accountEntropyPool.deriveMasterKey()
@@ -1234,7 +1183,7 @@ class RegistrationRepository(
       registrationId = keyMaterial.aciRegistrationId,
       voice = true,
       video = true,
-      fetchesMessages = fcmToken == null,
+      fetchesMessages = true,
       registrationLock = registrationLock,
       unidentifiedAccessKey = keyMaterial.unidentifiedAccessKey,
       unrestrictedUnidentifiedAccess = unrestrictedUnidentifiedAccess,
@@ -1261,7 +1210,7 @@ class RegistrationRepository(
       attributes = accountAttributes,
       aciPreKeys = keyMaterial.toAciPreKeyCollection(),
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
+
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,

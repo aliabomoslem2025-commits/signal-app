@@ -92,7 +92,7 @@ class IncomingMessageObserver(
     private val websocketReadTimeout: Long
       get() = if (censored) 30.seconds.inWholeMilliseconds else 1.minutes.inWholeMilliseconds
 
-    /** How long the websocket is allowed to keep running after the user backgrounds the app. Higher numbers allow us to rely on FCM less. */
+    /** How long the websocket is allowed to keep running after the user backgrounds the app. Higher numbers allow the app to keep the authenticated websocket available while the app is backgrounded. */
     private val maxBackgroundTime: Long
       get() = if (censored) 10.seconds.inWholeMilliseconds else 2.minutes.inWholeMilliseconds
 
@@ -479,7 +479,7 @@ class IncomingMessageObserver(
       Log.i(TAG, "Initializing! (${this.hashCode()})")
       uncaughtExceptionHandler = this
 
-      sleepTimer = if (!SignalStore.account.fcmEnabled || SignalStore.settings.forceWebsocketMode.isEnabled) AlarmSleepTimer(context) else UptimeSleepTimer()
+      sleepTimer = AlarmSleepTimer(context)
 
       canProcessMessages = !SignalStore.registration.restoreDecisionState.isDecisionPending
     }

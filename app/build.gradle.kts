@@ -348,7 +348,6 @@ android {
       isMinifyEnabled = false
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
-        "proguard/proguard-firebase-messaging.pro",
         "proguard/proguard-google-play-services.pro",
         "proguard/proguard-jackson.pro",
         "proguard/proguard-sqlite.pro",
@@ -626,43 +625,7 @@ androidComponents {
     variant.sources.assets?.addGeneratedSourceDirectory(taskProvider) { it.outputDir }
   }
 
-  onVariants(selector().withName("playProdDebug")) { variant ->
-    val androidTest = (variant as? HasAndroidTest)?.androidTest ?: return@onVariants
 
-    tasks.register<FirebaseTestLabTask>("firebaseTestLab") {
-      group = "Verification"
-      description = "Runs the ${variant.name} instrumentation tests on Firebase Test Lab via the gcloud CLI. Run a single class with -Pftl.class=<fqcn>[#method]; override other defaults with -Pftl.* properties."
-
-      appApkDirectory.set(variant.artifacts.get(SingleArtifact.APK))
-      testApkDirectory.set(androidTest.artifacts.get(SingleArtifact.APK))
-      builtArtifactsLoader.set(variant.artifacts.getBuiltArtifactsLoader())
-
-      val deviceOverride = project.providers.gradleProperty("ftl.devices").orNull
-      devices.set(
-        deviceOverride?.split(";")?.map { it.trim() }?.filter { it.isNotEmpty() }
-          ?: listOf("model=Pixel2.arm,version=31,locale=en,orientation=portrait")
-      )
-
-      useOrchestrator.set(true)
-      environmentVariables.set(mapOf("clearPackageData" to "true"))
-      testTimeout.set(project.providers.gradleProperty("ftl.timeout").getOrElse("30m"))
-      numFlakyTestAttempts.set(project.providers.gradleProperty("ftl.numFlakyTestAttempts").map { it.toInt() }.getOrElse(1))
-      gcloudProject.set(project.providers.gradleProperty("ftl.project"))
-      resultsBucket.set(project.providers.gradleProperty("ftl.resultsBucket"))
-      resultsDir.set(project.providers.gradleProperty("ftl.resultsDir"))
-
-      val testClass = project.providers.gradleProperty("ftl.class").orNull?.takeIf { it.isNotBlank() }
-      testTargets.set(
-        if (testClass != null) "class $testClass" else project.providers.gradleProperty("ftl.testTargets").orNull
-      )
-      gcloudExecutable.set(project.providers.gradleProperty("ftl.gcloud").getOrElse("gcloud"))
-      extraArgs.set(
-        project.providers.gradleProperty("ftl.extraArgs").orNull
-          ?.split(" ")?.map { it.trim() }?.filter { it.isNotEmpty() }
-          ?: emptyList()
-      )
-    }
-  }
 }
 
 baselineProfile {
@@ -773,11 +736,6 @@ dependencies {
   implementation(libs.androidx.emoji2)
   implementation(libs.androidx.paging.runtime)
   implementation(libs.androidx.paging.compose)
-  implementation(libs.firebase.messaging) {
-    exclude(group = "com.google.firebase", module = "firebase-core")
-    exclude(group = "com.google.firebase", module = "firebase-analytics")
-    exclude(group = "com.google.firebase", module = "firebase-measurement-connector")
-  }
   implementation(libs.google.play.services.maps)
   implementation(libs.google.play.services.auth)
   implementation(libs.google.signin)
@@ -1062,123 +1020,6 @@ abstract class CopyBenchmarkBackupTask : DefaultTask() {
     val backupFile = inputFile.get().asFile
     logger.lifecycle("Using benchmark backup: ${backupFile.absolutePath} (${backupFile.length() / 1024}KB)")
     backupFile.copyTo(dest.resolve("backup.binproto"), overwrite = true)
-  }
-}
-
-/**
- * Runs an instrumentation test suite on Firebase Test Lab by shelling out to `gcloud firebase test android run`.
- *
- * The `gcloud` CLI must be installed and authenticated (`gcloud auth login` and a configured project, or an
- * activated service account) before invoking this task.
- */
-@DisableCachingByDefault(because = "Executes tests on remote devices; results must never be served from the build cache")
-abstract class FirebaseTestLabTask
-@Inject
-constructor(
-  private val execOperations: ExecOperations
-) : DefaultTask() {
-  @get:InputFiles
-  @get:PathSensitive(PathSensitivity.RELATIVE)
-  abstract val appApkDirectory: DirectoryProperty
-
-  @get:InputFiles
-  @get:PathSensitive(PathSensitivity.RELATIVE)
-  abstract val testApkDirectory: DirectoryProperty
-
-  @get:Input
-  abstract val devices: ListProperty<String>
-
-  @get:Input
-  abstract val useOrchestrator: Property<Boolean>
-
-  @get:Input
-  abstract val environmentVariables: MapProperty<String, String>
-
-  @get:Input
-  abstract val testTimeout: Property<String>
-
-  @get:Input
-  abstract val numFlakyTestAttempts: Property<Int>
-
-  @get:Input
-  @get:Optional
-  abstract val gcloudProject: Property<String>
-
-  @get:Input
-  @get:Optional
-  abstract val resultsBucket: Property<String>
-
-  @get:Input
-  @get:Optional
-  abstract val resultsDir: Property<String>
-
-  @get:Input
-  @get:Optional
-  abstract val testTargets: Property<String>
-
-  @get:Input
-  abstract val gcloudExecutable: Property<String>
-
-  @get:Input
-  abstract val extraArgs: ListProperty<String>
-
-  @get:Internal
-  abstract val builtArtifactsLoader: Property<BuiltArtifactsLoader>
-
-  @TaskAction
-  fun run() {
-    val appApk = findApk(appApkDirectory.get(), "app")
-    val testApk = findApk(testApkDirectory.get(), "instrumentation test")
-
-    val arguments = mutableListOf(
-      gcloudExecutable.get(),
-      "firebase", "test", "android", "run",
-      "--type", "instrumentation",
-      "--app", appApk.absolutePath,
-      "--test", testApk.absolutePath,
-      "--timeout", testTimeout.get(),
-      "--num-flaky-test-attempts", numFlakyTestAttempts.get().toString()
-    )
-
-    devices.get().forEach { device ->
-      arguments += listOf("--device", device)
-    }
-
-    if (useOrchestrator.get()) {
-      arguments += "--use-orchestrator"
-    }
-
-    val environment = environmentVariables.get()
-    if (environment.isNotEmpty()) {
-      arguments += "--environment-variables"
-      arguments += environment.entries.joinToString(",") { "${it.key}=${it.value}" }
-    }
-
-    gcloudProject.orNull?.takeIf { it.isNotBlank() }?.let { arguments += listOf("--project", it) }
-    resultsBucket.orNull?.takeIf { it.isNotBlank() }?.let { arguments += listOf("--results-bucket", it) }
-    resultsDir.orNull?.takeIf { it.isNotBlank() }?.let { arguments += listOf("--results-dir", it) }
-    testTargets.orNull?.takeIf { it.isNotBlank() }?.let { arguments += listOf("--test-targets", it) }
-    arguments += extraArgs.get()
-
-    logger.lifecycle("Running Firebase Test Lab:\n  ${arguments.joinToString(" ")}")
-    execOperations.exec {
-      commandLine(arguments)
-    }
-  }
-
-  /**
-   * Resolves the APK this build produced from the variant's own output metadata. The directory listing can't be
-   * trusted: APKs are named per version and ABI, so it also holds every earlier build's, plus this build's other
-   * splits.
-   */
-  private fun findApk(directory: Directory, label: String): File {
-    val elements = builtArtifactsLoader.get().load(directory)?.elements?.takeIf { it.isNotEmpty() }
-      ?: throw GradleException("No $label APK found under ${directory.asFile.absolutePath}. Was the assemble task run?")
-
-    val element = elements.firstOrNull { it.filters.isEmpty() }
-      ?: throw GradleException("The $label APK is split by ${elements.flatMap { it.filters }.joinToString { it.filterType.name }} with no universal output to run on Test Lab.")
-
-    return File(element.outputFile)
   }
 }
 

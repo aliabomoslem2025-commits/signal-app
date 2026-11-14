@@ -8,6 +8,7 @@ package org.signal.registration.screens.phonenumber
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
@@ -429,6 +430,7 @@ private fun NextButton(
   state: PhoneNumberEntryState,
   onEvent: (PhoneNumberEntryScreenEvents) -> Unit
 ) {
+  val context = LocalContext.current
   val arrangement = if (state.isPhoneNumberlessRegistrationAvailable) {
     Arrangement.SpaceBetween
   } else {
@@ -463,6 +465,22 @@ private fun NextButton(
 
       Spacer(modifier = Modifier.width(8.dp))
     }
+
+    TextButton(
+      onClick = {
+        context.startActivity(
+          Intent().setClassName(
+            context,
+            "org.thoughtcrime.securesms.registration.local.LocalServerSettingsActivity"
+          )
+        )
+      },
+      enabled = !state.showSpinner
+    ) {
+      Text("Local server setup")
+    }
+
+    Spacer(modifier = Modifier.width(8.dp))
 
     Buttons.LargeTonal(
       onClick = { onEvent(PhoneNumberEntryScreenEvents.NextClicked) },

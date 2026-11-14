@@ -22,9 +22,6 @@
     android:theme="@style/Theme.RegistrationSample"
     android:supportsRtl="true">
 
-    <!-- Disable Firebase Analytics -->
-    <meta-data android:name="firebase_analytics_collection_deactivated" android:value="true" />
-    <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
 
     <activity
       android:name=".MainActivity"
@@ -36,14 +33,6 @@
       </intent-filter>
     </activity>
 
-    <!-- FCM Service for receiving push challenges -->
-    <service
-      android:name=".fcm.FcmReceiveService"
-      android:exported="false">
-      <intent-filter>
-        <action android:name="com.google.firebase.MESSAGING_EVENT" />
-      </intent-filter>
-    </service>
   </application>
 
 </manifest>

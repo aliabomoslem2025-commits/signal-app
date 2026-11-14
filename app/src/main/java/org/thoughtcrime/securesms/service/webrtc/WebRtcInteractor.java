@@ -70,6 +70,10 @@ public class WebRtcInteractor {
     return groupCallObserver;
   }
 
+  @NonNull String getGroupCallingServer() {
+    return signalCallManager.getConfiguredGroupCallingServer();
+  }
+
   @NonNull AppForegroundObserver.Listener getForegroundListener() {
     return foregroundListener;
   }

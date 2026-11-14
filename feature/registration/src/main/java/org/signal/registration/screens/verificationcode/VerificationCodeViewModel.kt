@@ -5,40 +5,28 @@
 
 package org.signal.registration.screens.verificationcode
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import androidx.annotation.VisibleForTesting
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.auth.api.phone.SmsRetriever
-import com.google.android.gms.common.api.CommonStatusCodes
-import com.google.android.gms.common.api.Status
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.signal.core.ui.compose.EventDrivenViewModel
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.net.RequestResult
 import org.signal.network.api.RegistrationApiV2.RegisterAccountError
-import org.signal.network.api.RegistrationApiV2.RequestVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.network.api.RegistrationApiV2.SubmitVerificationCodeError
-import org.signal.network.api.RegistrationApiV2.VerificationCodeTransport
 import org.signal.registration.PendingRestoreOption
 import org.signal.registration.RegistrationFlowEvent
+import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
 import org.signal.registration.RegistrationRoute
-import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.screens.util.navigateBack
 import org.signal.registration.screens.util.navigateTo
 import org.signal.uicomponents.codeentryfield.CodeEntryFieldAction
@@ -54,7 +42,6 @@ class VerificationCodeViewModel(
   private val repository: RegistrationRepository,
   private val parentState: StateFlow<RegistrationFlowState>,
   private val parentEventEmitter: (RegistrationFlowEvent) -> Unit,
-  smsCodeEvents: Flow<String> = emptyFlow(),
   private val clock: () -> Long = { System.currentTimeMillis() }
 ) : EventDrivenViewModel<VerificationCodeScreenEvents>(TAG, shouldLogEvents = false) {
 
@@ -67,38 +54,6 @@ class VerificationCodeViewModel(
      */
     private val IN_PROGRESS_DATA_TIMEOUT = 15.minutes
 
-    /**
-     * Cold [Flow] of verification codes automatically retrieved from incoming SMS messages via the Play Services SMS
-     * retriever. Registers a [BroadcastReceiver] for [SmsRetriever.SMS_RETRIEVED_ACTION] while collected, and
-     * unregisters it when collection stops.
-     */
-    fun smsCodeFlow(context: Context): Flow<String> = callbackFlow {
-      val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-          if (intent.action != SmsRetriever.SMS_RETRIEVED_ACTION) {
-            return
-          }
-
-          val status = intent.extras?.get(SmsRetriever.EXTRA_STATUS) as? Status
-          when (status?.statusCode) {
-            CommonStatusCodes.SUCCESS -> {
-              val code = VerificationCodeParser.parse(intent.extras?.getString(SmsRetriever.EXTRA_SMS_MESSAGE))
-              if (code != null) {
-                Log.i(TAG, "Received verification code via SMS retriever.")
-                trySend(code)
-              } else {
-                Log.w(TAG, "Could not parse verification code from retrieved SMS.")
-              }
-            }
-            CommonStatusCodes.TIMEOUT -> Log.w(TAG, "Timed out waiting for the verification SMS to arrive.")
-            else -> Log.w(TAG, "SMS retriever broadcast had an unexpected status code: ${status?.statusCode}")
-          }
-        }
-      }
-
-      ContextCompat.registerReceiver(context, receiver, IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION), SmsRetriever.SEND_PERMISSION, null, ContextCompat.RECEIVER_EXPORTED)
-      awaitClose { context.unregisterReceiver(receiver) }
-    }
   }
 
   private val _state = MutableStateFlow(VerificationCodeState())
@@ -129,15 +84,26 @@ class VerificationCodeViewModel(
       }
       .launchIn(viewModelScope)
 
+    // SMS autofill is intentionally disabled. LAN codes arrive through LocalAuthCodeBus below.
     viewModelScope.launch {
-      smsCodeEvents.collect { code ->
-        onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
-      }
-    }
-
-    viewModelScope.launch {
-      LocalAuthCodeBus.codes.collect { code ->
-        onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+      LocalAuthCodeBus.codes.collect { event ->
+        // The one-shot code may arrive before the phone-number screen has navigated to this screen.
+        // Wait for this exact registration session rather than dropping a valid code on a scheduling race.
+        val matchingParent = withTimeoutOrNull(10.seconds) {
+          parentState.first { it.sessionMetadata?.id == event.challengeSessionId }
+        }
+        if (matchingParent != null) {
+          val matchingState = withTimeoutOrNull(5.seconds) {
+            state.first { it.sessionMetadata?.id == event.challengeSessionId }
+          }
+          if (matchingState != null) {
+            onEvent(VerificationCodeScreenEvents.CodeAutoFilled(event.value))
+          } else {
+            Log.w(TAG, "Timed out waiting for the local verification session to become active.")
+          }
+        } else {
+          Log.d(TAG, "Ignoring a local verification code for a stale registration challenge.")
+        }
       }
     }
   }
@@ -155,8 +121,8 @@ class VerificationCodeViewModel(
       is VerificationCodeScreenEvents.CodeEntryStateChanged -> state.copy(codeEntry = event.codeEntryState)
       is VerificationCodeScreenEvents.CodeAutoFilled -> applyCodeAutoFilled(state, event.code)
       is VerificationCodeScreenEvents.WrongNumber -> state.also { parentEventEmitter.navigateTo(RegistrationRoute.PhoneNumberEntry) }
-      is VerificationCodeScreenEvents.ResendSms -> applyResendCode(state, VerificationCodeTransport.SMS)
-      is VerificationCodeScreenEvents.CallMe -> applyResendCode(state, VerificationCodeTransport.VOICE)
+      is VerificationCodeScreenEvents.ResendSms -> state
+      is VerificationCodeScreenEvents.CallMe -> state
       is VerificationCodeScreenEvents.HavingTrouble -> state.copy(showContactSupportSheet = true)
       is VerificationCodeScreenEvents.DismissContactSupport -> state.copy(showContactSupportSheet = false)
       is VerificationCodeScreenEvents.ContactSupportDialog -> state.copy(showContactSupportDialog = true)
@@ -212,6 +178,7 @@ class VerificationCodeViewModel(
     return state.copy(
       sessionMetadata = parentState.sessionMetadata,
       e164 = parentState.sessionE164,
+      isLocalAuth = parentState.sessionMetadata.id.startsWith(LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX),
       rateLimits = rateLimits
     )
   }
@@ -238,7 +205,7 @@ class VerificationCodeViewModel(
   }
 
   /**
-   * Places a [code] retrieved from an incoming SMS into the code field, which then reports it back as entered and
+   * Places a [code] returned by the LAN device-authentication service into the code field, which reports it as entered and
    * submits it.
    */
   private fun applyCodeAutoFilled(state: VerificationCodeState, code: String): VerificationCodeState {
@@ -420,96 +387,6 @@ class VerificationCodeViewModel(
     }
   }
 
-  private suspend fun applyResendCode(
-    state: VerificationCodeState,
-    transport: VerificationCodeTransport
-  ): VerificationCodeState {
-    if (state.sessionMetadata == null) {
-      parentEventEmitter(RegistrationFlowEvent.ResetState)
-      return state
-    }
-
-    val result = repository.requestVerificationCode(
-      sessionId = state.sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
-      transport = transport
-    )
-
-    return when (result) {
-      is RequestResult.Success -> {
-        Log.i(TAG, "[RequestCode][$transport] Successfully requested verification code.")
-        parentEventEmitter(RegistrationFlowEvent.VerificationCodeRequested.from(state.e164, transport, result.result, clock()))
-        parentEventEmitter(RegistrationFlowEvent.SessionUpdated(result.result))
-        state.copy(
-          sessionMetadata = result.result,
-          rateLimits = computeRateLimits(result.result)
-        )
-      }
-      is RequestResult.NonSuccess -> {
-        when (val error = result.error) {
-          is RequestVerificationCodeError.InvalidRequest -> {
-            Log.w(TAG, "[RequestCode][$transport] Invalid request: ${error.message}")
-            state.copy(dialogs = state.dialogs.copy(unknownError = true))
-          }
-          is RequestVerificationCodeError.RateLimited -> {
-            Log.w(TAG, "[RequestCode][$transport] Rate limited (retryAfter: ${error.retryAfter}).")
-            parentEventEmitter(RegistrationFlowEvent.SessionUpdated(error.session))
-            state.copy(
-              dialogs = state.dialogs.copy(rateLimitedRetryAfter = error.retryAfter),
-              sessionMetadata = error.session,
-              rateLimits = computeRateLimits(error.session)
-            )
-          }
-          is RequestVerificationCodeError.CouldNotFulfillWithRequestedTransport -> {
-            Log.w(TAG, "[RequestCode][$transport] Could not fulfill with requested transport.")
-            parentEventEmitter(RegistrationFlowEvent.SessionUpdated(error.session))
-            state.copy(
-              dialogs = state.dialogs.copy(couldNotRequestCodeWithSelectedTransport = true),
-              sessionMetadata = error.session,
-              rateLimits = computeRateLimits(error.session)
-            )
-          }
-          is RequestVerificationCodeError.InvalidSessionId -> {
-            Log.w(TAG, "[RequestCode][$transport] Invalid session ID: ${error.message}. Navigating back to phone number entry.")
-            parentEventEmitter.navigateBack()
-            state
-          }
-          is RequestVerificationCodeError.MissingRequestInformationOrAlreadyVerified -> {
-            Log.w(TAG, "[RequestCode][$transport] Missing request information or already verified.")
-            parentEventEmitter(RegistrationFlowEvent.SessionUpdated(error.session))
-            state.copy(
-              dialogs = state.dialogs.copy(unableToSendSms = true),
-              sessionMetadata = error.session,
-              rateLimits = computeRateLimits(error.session)
-            )
-          }
-          is RequestVerificationCodeError.SessionNotFound -> {
-            Log.w(TAG, "[RequestCode][$transport] Session not found: ${error.message}. Navigating back to phone number entry.")
-            parentEventEmitter.navigateBack()
-            state
-          }
-          is RequestVerificationCodeError.ThirdPartyServiceError -> {
-            Log.w(TAG, "[RequestCode][$transport] Third party service error. ${error.data}")
-            state.copy(dialogs = state.dialogs.copy(providerRejectedTransport = transport))
-          }
-        }
-      }
-      is RequestResult.RetryableNetworkError -> {
-        Log.w(TAG, "[RequestCode][$transport] Network error.", result.networkError)
-        state.copy(dialogs = state.dialogs.copy(networkError = true))
-      }
-      is RequestResult.ApplicationError -> {
-        Log.w(TAG, "[RequestCode][$transport] Unknown application error.", result.cause)
-        state.copy(dialogs = state.dialogs.copy(unknownError = true))
-      }
-    }
-  }
-
-  /**
-   * Builds the countdowns from a freshly-returned session. A null [SessionMetadata.nextSms]/[SessionMetadata.nextCall]
-   * means the server won't permit that request, which we surface as a null remaining time (an unavailable button)
-   * rather than a countdown.
-   */
   private fun computeRateLimits(session: SessionMetadata): SmsAndCallRateLimits {
     return SmsAndCallRateLimits(
       smsResendTimeRemaining = session.nextSms?.seconds?.coerceAtLeast(0.seconds),

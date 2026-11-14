@@ -168,9 +168,6 @@ google-guava-android = "com.google.guava:guava:33.6.0-android"
 google-flexbox = "com.google.android.flexbox:flexbox:3.0.0"
 com-google-devtools-ksp-gradle-plugin = "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:2.3.6"
 
-# Firebase
-firebase-messaging = "com.google.firebase:firebase-messaging:25.0.1"
-
 # 1st Party
 libsignal-client = { module = "org.signal:libsignal-client", version.ref = "libsignal-client" }
 libsignal-android = { module = "org.signal:libsignal-android", version.ref = "libsignal-client" }

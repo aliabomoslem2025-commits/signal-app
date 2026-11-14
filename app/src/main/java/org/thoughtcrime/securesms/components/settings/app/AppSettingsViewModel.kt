@@ -100,7 +100,7 @@ class AppSettingsViewModel(
       AppSettingsEvent.InviteClicked -> parentEventEmitter.openSection(AppSettingsRoute.Invite)
       AppSettingsEvent.LabsClicked -> parentEventEmitter.openSection(AppSettingsRoute.LabsRoute.Labs)
       AppSettingsEvent.InternalClicked -> parentEventEmitter.openSection(AppSettingsRoute.InternalRoute.Internal)
-      AppSettingsEvent.LocalServerSetupClicked -> _actions.send(AppSettingsAction.OpenLocalServerSettings)
+      AppSettingsEvent.LocalServerSettingsClicked -> _actions.send(AppSettingsAction.OpenLocalServerSettings)
       AppSettingsEvent.SnackbarDismissed -> _state.update { it.copy(snackbar = Snackbar.None) }
     }
   }

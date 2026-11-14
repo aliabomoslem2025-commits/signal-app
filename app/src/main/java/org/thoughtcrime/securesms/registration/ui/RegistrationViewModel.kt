@@ -376,7 +376,7 @@ class RegistrationViewModel : ViewModel() {
     var smsListenerReady = false
     Log.d(TAG, "Initializing SMS listener.")
     if (store.value.smsListenerTimeout < System.currentTimeMillis()) {
-      smsListenerReady = store.value.isFcmSupported && RegistrationRepository.registerSmsListener(context)
+      smsListenerReady = false // SMS Retriever was removed from this LAN build.
 
       if (smsListenerReady) {
         val smsRetrieverTimeout = System.currentTimeMillis() + 5.minutes.inWholeMilliseconds

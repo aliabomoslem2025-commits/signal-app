@@ -14,7 +14,6 @@ import org.whispersystems.signalservice.api.provisioning.RestoreMethod
 import org.whispersystems.signalservice.api.push.SignedPreKeyEntity
 import org.whispersystems.signalservice.internal.push.BackupV2AuthCheckResponse
 import org.whispersystems.signalservice.internal.push.BackupV3AuthCheckResponse
-import org.whispersystems.signalservice.internal.push.GcmRegistrationId
 import org.whispersystems.signalservice.internal.push.KyberPreKeyEntity
 import org.whispersystems.signalservice.internal.push.PushServiceSocket
 import org.whispersystems.signalservice.internal.push.RegisterAsSecondaryDeviceRequest
@@ -34,9 +33,9 @@ class RegistrationApi(
    *
    * `POST /v1/verification/session`
    */
-  fun createRegistrationSession(fcmToken: String?, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> {
+  fun createRegistrationSession(mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> {
     return NetworkResult.fromFetch {
-      pushServiceSocket.createVerificationSession(fcmToken, mcc, mnc)
+      pushServiceSocket.createVerificationSession(mcc, mnc)
     }
   }
 
@@ -52,15 +51,9 @@ class RegistrationApi(
   }
 
   /**
-   * Submit an FCM token to the service as proof that this is an honest user attempting to register.
-   *
-   * `PATCH /v1/verification/session/{session-id}`
+   * Push challenge submission was removed with the FCM transport. LAN-only builds authenticate
+   * through the local device-authentication flow and ntfy is registered per authenticated device.
    */
-  fun submitPushChallengeToken(sessionId: String?, pushChallengeToken: String?): NetworkResult<RegistrationSessionMetadataResponse> {
-    return NetworkResult.fromFetch {
-      pushServiceSocket.patchVerificationSession(sessionId, null, null, null, null, pushChallengeToken)
-    }
-  }
 
   /**
    * Request an SMS verification code.  On success, the server will send
@@ -94,7 +87,7 @@ class RegistrationApi(
    */
   fun submitCaptchaToken(sessionId: String, captchaToken: String): NetworkResult<RegistrationSessionMetadataResponse> {
     return NetworkResult.fromFetch {
-      pushServiceSocket.patchVerificationSession(sessionId, null, null, null, captchaToken, null)
+      pushServiceSocket.patchVerificationSession(sessionId, null, null, captchaToken)
     }
   }
 
@@ -103,9 +96,9 @@ class RegistrationApi(
    *
    * `POST /v1/registration`
    */
-  fun registerAccount(sessionId: String?, recoveryPassword: String?, attributes: AccountAttributes?, aciPreKeys: PreKeyCollection?, pniPreKeys: PreKeyCollection?, fcmToken: String?, skipDeviceTransfer: Boolean): NetworkResult<VerifyAccountResponse> {
+  fun registerAccount(sessionId: String?, recoveryPassword: String?, attributes: AccountAttributes?, aciPreKeys: PreKeyCollection?, pniPreKeys: PreKeyCollection?, skipDeviceTransfer: Boolean): NetworkResult<VerifyAccountResponse> {
     return NetworkResult.fromFetch {
-      pushServiceSocket.submitRegistrationRequest(sessionId, recoveryPassword, attributes, aciPreKeys, pniPreKeys, fcmToken, skipDeviceTransfer)
+      pushServiceSocket.submitRegistrationRequest(sessionId, recoveryPassword, attributes, aciPreKeys, pniPreKeys, skipDeviceTransfer)
     }
   }
 
@@ -151,7 +144,7 @@ class RegistrationApi(
    * - 422: Request is invalid
    * - 429: Rate limited
    */
-  fun registerAsSecondaryDevice(verificationCode: String, attributes: DeviceAttributes, aciPreKeys: PreKeyCollection, pniPreKeys: PreKeyCollection, fcmToken: String?): NetworkResult<RegisterAsSecondaryDeviceResponse> {
+  fun registerAsSecondaryDevice(verificationCode: String, attributes: DeviceAttributes, aciPreKeys: PreKeyCollection, pniPreKeys: PreKeyCollection): NetworkResult<RegisterAsSecondaryDeviceResponse> {
     val request = RegisterAsSecondaryDeviceRequest(
       verificationCode = verificationCode,
       accountAttributes = attributes,
@@ -159,7 +152,6 @@ class RegistrationApi(
       pniSignedPreKey = SignedPreKeyEntity(pniPreKeys.signedPreKey.id.toLong(), pniPreKeys.signedPreKey.keyPair.publicKey, pniPreKeys.signedPreKey.signature),
       aciPqLastResortPreKey = KyberPreKeyEntity(aciPreKeys.lastResortKyberPreKey.id.toLong(), aciPreKeys.lastResortKyberPreKey.keyPair.publicKey, aciPreKeys.lastResortKyberPreKey.signature),
       pniPqLastResortPreKey = KyberPreKeyEntity(pniPreKeys.lastResortKyberPreKey.id.toLong(), pniPreKeys.lastResortKyberPreKey.keyPair.publicKey, pniPreKeys.lastResortKyberPreKey.signature),
-      gcmToken = fcmToken?.let { GcmRegistrationId(it, true) }
     )
 
     return NetworkResult.fromFetch {

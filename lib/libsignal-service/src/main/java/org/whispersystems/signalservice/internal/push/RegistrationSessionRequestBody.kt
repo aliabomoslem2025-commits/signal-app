@@ -16,7 +16,6 @@ data class RegistrationSessionRequestBody(
   @JsonProperty val pniSignedPreKey: SignedPreKeyEntity,
   @JsonProperty val aciPqLastResortPreKey: KyberPreKeyEntity,
   @JsonProperty val pniPqLastResortPreKey: KyberPreKeyEntity,
-  @JsonProperty val gcmToken: GcmRegistrationId?,
   @JsonProperty val skipDeviceTransfer: Boolean,
   @JsonProperty val requireAtomic: Boolean = true
 )

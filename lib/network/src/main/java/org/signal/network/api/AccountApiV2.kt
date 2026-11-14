@@ -14,7 +14,6 @@ import org.signal.core.util.serialization.ECPublicKeyToBase64Serializer
 import org.signal.core.util.serialization.KEMPublicKeyToBase64Serializer
 import org.signal.core.util.serialization.SignalJson
 import org.signal.libsignal.net.AuthAccountsService
-import org.signal.libsignal.net.AuthDevicesService
 import org.signal.libsignal.net.AuthUsernamesService
 import org.signal.libsignal.net.BadRequestError
 import org.signal.libsignal.net.ConfirmTotpKeyError
@@ -81,23 +80,39 @@ class AccountApiV2(private val authWebSocket: SignalWebSocket.AuthenticatedWebSo
     )
   }
 
+  @Serializable
+  data class NtfyRegistrationResponse(
+    @SerialName("topic") val topic: String
+  )
+
   /**
-   * Sets the FCM push token the server should use to notify this device of new messages.
+   * Idempotently provisions the authenticated device's private ntfy topic.
+   * The server returns the same random topic until this device revokes it.
+   *
+   * PUT /v1/accounts/ntfy/
    */
-  suspend fun setFcmToken(fcmToken: String): RequestResult<Unit, Nothing> {
-    return authWebSocket.runCatchingWithChatConnection { connection ->
-      AuthDevicesService(connection).setPushToken(fcmToken)
-    }
+  suspend fun registerNtfyTopic(): RequestResult<String, Nothing> {
+    return authWebSocket.requestResult(
+      request = WebSocketRequestMessage.put("/v1/accounts/ntfy", "{}"),
+      parseSuccess = { response ->
+        SignalJson.decode(NtfyRegistrationResponse.serializer(), response.body).getOrNull()?.topic
+          ?: throw IOException("Unparseable ntfy registration response")
+      },
+      mapError = { null }
+    )
   }
 
   /**
-   * Removes any push tokens associated with this device. Afterwards, the server will assume this device
-   * polls for new messages over an open websocket.
+   * Revokes this device's private ntfy topic.
+   *
+   * DELETE /v1/accounts/ntfy/
    */
-  suspend fun clearFcmToken(): RequestResult<Unit, Nothing> {
-    return authWebSocket.runCatchingWithChatConnection { connection ->
-      AuthDevicesService(connection).clearPushToken()
-    }
+  suspend fun revokeNtfyTopic(): RequestResult<Unit, Nothing> {
+    return authWebSocket.requestResult(
+      request = WebSocketRequestMessage.delete("/v1/accounts/ntfy"),
+      parseSuccess = { },
+      mapError = { null }
+    )
   }
 
   /**

@@ -79,7 +79,6 @@ class DebugNetworkController(
 
   override suspend fun createSession(
     e164: String,
-    fcmToken: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
@@ -87,7 +86,7 @@ class DebugNetworkController(
       Log.d(TAG, "[createSession] Returning debug override")
       return it
     }
-    return delegate.createSession(e164, fcmToken, mcc, mnc)
+    return delegate.createSession(e164, mcc, mnc)
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
@@ -100,14 +99,13 @@ class DebugNetworkController(
 
   override suspend fun updateSession(
     sessionId: String,
-    pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
     NetworkDebugState.getOverride<RequestResult<SessionMetadata, UpdateSessionError>>("updateSession")?.let {
       Log.d(TAG, "[updateSession] Returning debug override")
       return it
     }
-    return delegate.updateSession(sessionId, pushChallengeToken, captchaToken)
+    return delegate.updateSession(sessionId, captchaToken)
   }
 
   override suspend fun requestVerificationCode(
@@ -143,7 +141,6 @@ class DebugNetworkController(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
@@ -153,7 +150,7 @@ class DebugNetworkController(
       Log.d(TAG, "[registerAccount] Returning debug override")
       return it
     }
-    return delegate.registerAccount(e164, password, sessionId, recoveryPassword, receiptCredentialPresentation, attributes, aciPreKeys, pniPreKeys, fcmToken, skipDeviceTransfer, aci, totp, webAuthnResponse)
+    return delegate.registerAccount(e164, password, sessionId, recoveryPassword, receiptCredentialPresentation, attributes, aciPreKeys, pniPreKeys, skipDeviceTransfer, aci, totp, webAuthnResponse)
   }
 
   override suspend fun getLoginConfiguration(): RequestResult<LoginConfiguration, GetLoginConfigurationError> {
@@ -189,19 +186,6 @@ class DebugNetworkController(
   override fun createReceiptCredentialPresentation(receiptCredential: ReceiptCredential): ReceiptCredentialResult<ReceiptCredentialPresentation> {
     // No override support for pure computations
     return delegate.createReceiptCredentialPresentation(receiptCredential)
-  }
-
-  override suspend fun getFcmToken(): String? {
-    // No override support for simple value methods
-    return delegate.getFcmToken()
-  }
-
-  override suspend fun awaitPushChallengeToken(): String? {
-    if (NetworkDebugState.skipPushChallenge.value) {
-      Log.d(TAG, "[awaitPushChallengeToken] Skipping push challenge (debug override)")
-      return null
-    }
-    return delegate.awaitPushChallengeToken()
   }
 
   override fun getCaptchaUrl(): String {
@@ -332,9 +316,8 @@ class DebugNetworkController(
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
-    return delegate.registerAsLinkedDevice(aci, password, provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys, fcmToken)
+    return delegate.registerAsLinkedDevice(aci, password, provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys)
   }
 
   override suspend fun onLinkedDeviceRegistered() {

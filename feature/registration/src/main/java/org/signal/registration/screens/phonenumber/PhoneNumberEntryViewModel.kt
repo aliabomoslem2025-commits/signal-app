@@ -582,10 +582,10 @@ class PhoneNumberEntryViewModel(
       state = state.copy(sessionMetadata = null)
     }
 
-    // If we recently requested an SMS for this same number, the server would just reject another request. Skip it and go straight to code entry.
+    // If a verification request for this number is already pending, skip the duplicate request and go straight to code entry.
     val nextSmsRequestAllowed = state.smsVerificationCodeRequest
     if (state.sessionMetadata != null && state.sessionE164 == e164 && nextSmsRequestAllowed?.e164 == e164 && clock() < nextSmsRequestAllowed.nextAllowedRequestTime) {
-      Log.i(TAG, "[RequestVerificationCode] An SMS was already requested for this number and another isn't allowed for ${(nextSmsRequestAllowed.nextAllowedRequestTime - clock()).milliseconds}. Skipping the request and going straight to code entry.")
+      Log.i(TAG, "[RequestVerificationCode] A verification request was already started for this number and another isn't allowed for ${(nextSmsRequestAllowed.nextAllowedRequestTime - clock()).milliseconds}. Skipping the request and going straight to code entry.")
       parentEventEmitter(RegistrationFlowEvent.E164Chosen(e164))
       parentEventEmitter.navigateTo(RegistrationRoute.VerificationCodeEntry)
       return state
@@ -665,13 +665,13 @@ class PhoneNumberEntryViewModel(
     }
 
     if (!sessionMetadata.allowedToRequestCode && sessionMetadata.requestedInformation.isEmpty()) {
-      Log.w(TAG, "Not allowed to request code and no challenges requested. Unable to send SMS.")
+      Log.w(TAG, "Not allowed to request code and no challenges requested. Unable to start LAN device verification.")
       return state.copy(dialogs = state.dialogs.copy(unableToSendSms = true))
     }
 
     val verificationCodeResponse = this@PhoneNumberEntryViewModel.repository.requestVerificationCode(
       sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = false,
+      smsAutoRetrieveCodeSupported = false, // LAN verification never uses SMS Retriever.
       transport = VerificationCodeTransport.SMS
     )
 
@@ -793,7 +793,7 @@ class PhoneNumberEntryViewModel(
 
     val verificationCodeResponse = this@PhoneNumberEntryViewModel.repository.requestVerificationCode(
       sessionId = sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = false,
+      smsAutoRetrieveCodeSupported = false, // LAN verification never uses SMS Retriever.
       transport = VerificationCodeTransport.SMS
     )
 

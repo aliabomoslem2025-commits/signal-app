@@ -66,6 +66,7 @@ import org.thoughtcrime.securesms.net.SignalNetwork;
 import org.thoughtcrime.securesms.notifications.v2.ConversationId;
 import org.thoughtcrime.securesms.ratelimit.ProofRequiredExceptionHandler;
 import org.thoughtcrime.securesms.recipients.Recipient;
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig;
 import org.thoughtcrime.securesms.recipients.RecipientIds;
 import org.thoughtcrime.securesms.recipients.RecipientUtil;
 import org.thoughtcrime.securesms.ringrtc.CameraEventListener;
@@ -456,7 +457,7 @@ public final class SignalCallManager implements CallManager.Observer, GroupCall.
                                                                                                    CallLinkSecretParams.deriveFromRootKey(callLinkRootKey.getKeyBytes())
                                                                                                );
 
-        callManager.peekCallLinkCall(SignalStore.internal().getGroupCallingServer(), callLinkAuthCredentialPresentation.serialize(), callLinkRootKey, peekInfo -> {
+        callManager.peekCallLinkCall(getConfiguredGroupCallingServer(), callLinkAuthCredentialPresentation.serialize(), callLinkRootKey, peekInfo -> {
           PeekInfo info = peekInfo.getValue();
           if (info == null) {
             Log.w(TAG, "Failed to get peek info: " + peekInfo.getStatus());
@@ -510,7 +511,7 @@ public final class SignalCallManager implements CallManager.Observer, GroupCall.
 
         List<GroupCall.GroupMemberInfo> members = GroupManager.getUuidCipherTexts(context, groupId).entrySet().stream()
                                                               .map(entry -> new GroupCall.GroupMemberInfo(entry.getKey(), entry.getValue().serialize())).collect(Collectors.toList());
-        callManager.peekGroupCall(SignalStore.internal().getGroupCallingServer(), credential.token.getBytes(Charsets.UTF_8), members, peekInfo -> {
+        callManager.peekGroupCall(getConfiguredGroupCallingServer(), credential.token.getBytes(Charsets.UTF_8), members, peekInfo -> {
           Long threadId = SignalDatabase.threads().getThreadIdFor(group.getId());
 
           if (threadId != null) {
@@ -553,7 +554,7 @@ public final class SignalCallManager implements CallManager.Observer, GroupCall.
                                                               .map(entry -> new GroupCall.GroupMemberInfo(entry.getKey(), entry.getValue().serialize()))
                                                               .collect(Collectors.toList());
 
-        callManager.peekGroupCall(SignalStore.internal().getGroupCallingServer(),
+        callManager.peekGroupCall(getConfiguredGroupCallingServer(),
                                   credential.token.getBytes(Charsets.UTF_8),
                                   members,
                                   peekInfo -> receivedGroupCallPeekForRingingCheck(info, peekInfo));
@@ -1169,9 +1170,26 @@ public final class SignalCallManager implements CallManager.Observer, GroupCall.
     }
   }
 
+  String getConfiguredGroupCallingServer() {
+    LocalServerConfig config = LocalServerConfig.load(context);
+    return config.getLocalAuthOnly()
+        ? config.endpoint("sfu")
+        : SignalStore.internal().getGroupCallingServer();
+  }
+
   public void retrieveTurnServers(@NonNull RemotePeer remotePeer) {
     SignalExecutors.BOUNDED_IO.execute(() -> {
       try {
+        LocalServerConfig localConfig = LocalServerConfig.load(context);
+        if (localConfig.getLocalAuthOnly()) {
+          List<PeerConnection.IceServer> configuredServers = localConfig.configuredTurnServers();
+          if (!configuredServers.isEmpty()) {
+            TurnServerCache.updateCache(configuredServers, 3600);
+            processTurnServers(remotePeer, configuredServers);
+            return;
+          }
+        }
+
         List<PeerConnection.IceServer> cachedServers = TurnServerCache.getCachedServers();
         if (cachedServers != null) {
           processTurnServers(remotePeer, cachedServers);

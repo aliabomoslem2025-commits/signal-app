@@ -96,18 +96,6 @@ public class SignalServiceAccountManager {
     return NetworkResultUtil.toBasicLegacy(accountApi.whoAmI());
   }
 
-  /**
-   * Request a push challenge. A number will be pushed to the GCM (FCM) id. This can then be used
-   * during SMS/call requests to bypass the CAPTCHA.
-   *
-   * @param gcmRegistrationId The GCM (FCM) id to use.
-   * @param sessionId         The session to request a push for.
-   * @throws IOException
-   */
-  public void requestRegistrationPushChallenge(String sessionId, String gcmRegistrationId) throws IOException {
-    pushServiceSocket.requestPushChallenge(sessionId, gcmRegistrationId);
-  }
-
   public void checkNetworkConnection() throws IOException {
     this.pushServiceSocket.pingStorageService();
   }

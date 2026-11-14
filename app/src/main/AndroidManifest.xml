@@ -101,13 +101,7 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
         <meta-data
-            android:name="firebase_analytics_collection_deactivated"
-            android:value="true" />
-        <meta-data
             android:name="google_analytics_adid_collection_enabled"
-            android:value="false" />
-        <meta-data
-            android:name="firebase_messaging_auto_init_enabled"
             android:value="false" />
         <meta-data
             android:name="android.webkit.WebView.MetricsOptOut"
@@ -1361,28 +1355,9 @@
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name=".gcm.FcmFetchBackgroundService"
-            android:exported="false" />
-
-        <service
-            android:name=".gcm.FcmFetchForegroundService"
+            android:name=".push.NtfyPushService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
-
-        <service
-            android:name=".gcm.FcmReceiveService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".gcm.FcmJobService"
-            android:enabled="@bool/enable_job_service"
-            android:exported="false"
-            android:permission="android.permission.BIND_JOB_SERVICE"
-            tools:targetApi="26" />
 
         <service
             android:name=".jobmanager.JobSchedulerScheduler$SystemService"
@@ -1646,16 +1621,13 @@
         </provider>
 
         <activity
-            android:name=".network.local.LocalServerSettingsActivity"
+            android:name=".registration.local.LocalServerSettingsActivity"
             android:exported="false"
-            android:label="شبکه محلی و احراز هویت"
-            android:theme="@style/TextSecure.LightTheme" />
+            android:label="Local server settings" />
+
         <activity
-            android:name=".network.local.LocalAppPinActivity"
-            android:excludeFromRecents="true"
+            android:name=".registration.local.LocalPinUnlockActivity"
             android:exported="false"
-            android:label="قفل برنامه"
-            android:launchMode="singleTop"
-            android:theme="@style/TextSecure.LightTheme" />
+            android:label="Unlock app" />
     </application>
 </manifest>

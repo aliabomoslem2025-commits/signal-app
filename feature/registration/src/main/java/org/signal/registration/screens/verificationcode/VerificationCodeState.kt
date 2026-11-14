@@ -14,6 +14,7 @@ import kotlin.time.Duration.Companion.seconds
 data class VerificationCodeState(
   val sessionMetadata: SessionMetadata? = null,
   val e164: String = "",
+  val isLocalAuth: Boolean = false,
   val isSubmittingCode: Boolean = false,
   val rateLimits: SmsAndCallRateLimits = SmsAndCallRateLimits(),
   val incorrectCodeAttempts: Int = 0,
@@ -23,7 +24,7 @@ data class VerificationCodeState(
   val snackbars: Snackbars = Snackbars(),
   val dialogs: Dialogs = Dialogs()
 ) {
-  override fun toString(): String = "VerificationCodeState(sessionMetadata=$sessionMetadata, e164=$e164, isSubmittingCode=$isSubmittingCode, rateLimits=$rateLimits, incorrectCodeAttempts=$incorrectCodeAttempts, codeEntry=$codeEntry, showContactSupportSheet=$showContactSupportSheet,  showContactSupportDialog=$showContactSupportDialog, snackbars=$snackbars, dialogs=$dialogs)"
+  override fun toString(): String = "VerificationCodeState(sessionMetadata=$sessionMetadata, e164=$e164, isLocalAuth=$isLocalAuth, isSubmittingCode=$isSubmittingCode, rateLimits=$rateLimits, incorrectCodeAttempts=$incorrectCodeAttempts, codeEntry=$codeEntry, showContactSupportSheet=$showContactSupportSheet,  showContactSupportDialog=$showContactSupportDialog, snackbars=$snackbars, dialogs=$dialogs)"
 
   /** Transient errors from submitting a code or registering, shown as snackbars. Cleared once shown and dismissed. */
   data class Snackbars(

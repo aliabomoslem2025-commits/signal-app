@@ -66,7 +66,7 @@ import org.signal.network.service.UsernameService.ConfirmUsernameError
 import org.signal.network.service.UsernameService.ConfirmedUsername
 import org.signal.network.service.UsernameService.ReserveUsernameError
 import org.signal.registration.LinkAndSyncWaitResult
-import org.signal.registration.LocalAuthCodeBus
+import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.signal.registration.NetworkController
 import org.signal.registration.NetworkController.BackupMasterKeyError
 import org.signal.registration.NetworkController.GetSvrCredentialsError
@@ -90,7 +90,6 @@ import org.thoughtcrime.securesms.backup.v2.BackupRepository
 import org.thoughtcrime.securesms.backup.v2.RestoreTimestampResult
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileContentUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileKeyUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceSyncRequestJob
@@ -105,10 +104,6 @@ import org.thoughtcrime.securesms.pin.SvrWrongPinException
 import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
 import org.thoughtcrime.securesms.recipients.Recipient
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
-import org.thoughtcrime.securesms.network.local.LocalServerConfigStore
-import org.thoughtcrime.securesms.registration.v2.localauth.LocalAuthSessionRegistry
-import org.thoughtcrime.securesms.registration.v2.localauth.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.ui.restore.StorageServiceRestore
 import org.thoughtcrime.securesms.registration.ui.restore.e164OrNull
 import org.thoughtcrime.securesms.registration.ui.restore.pniIdentityKeyPair
@@ -144,79 +139,56 @@ class AppRegistrationNetworkController(
   private val registrationApi: RegistrationApiV2
 ) : NetworkController {
 
+  private val localDeviceAuthClient by lazy { LocalDeviceAuthClient(context) }
+
+  override fun isLocalAuthEnabled(): Boolean = localDeviceAuthClient.isEnabled
+
   companion object {
     private val TAG = Log.tag(AppRegistrationNetworkController::class)
-    private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
     private val RETRY_BACKOFF = 5.seconds
   }
 
   override suspend fun createSession(
     e164: String,
-    fcmToken: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
-    return withContext(Dispatchers.IO) {
-      try {
-        val config = LocalServerConfigStore.load(context)
-        if (!config.localAuthEnabled) {
-          throw IllegalStateException("LAN-only mode is required; SMS verification is disabled.")
-        }
-
-        val challenge = LocalDeviceAuthClient(context).beginRegistration(e164)
-        LocalAuthSessionRegistry.put(challenge.challengeId, e164, challenge.verificationCode)
-        RequestResult.Success(
-          SessionMetadata(
-            id = challenge.challengeId,
-            nextSms = null,
-            nextCall = null,
-            nextVerificationAttempt = null,
-            allowedToRequestCode = true,
-            requestedInformation = emptyList(),
-            verified = false
-          )
-        )
-      } catch (error: CancellationException) {
-        throw error
-      } catch (error: Exception) {
-        Log.w(TAG, "Local device authorization could not create a registration challenge.", error)
-        RequestResult.ApplicationError(error)
+    if (localDeviceAuthClient.isEnabled) {
+      return try {
+        RequestResult.Success(localDeviceAuthClient.createSession(e164))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        RequestResult.ApplicationError(e)
       }
     }
+    return RequestResult.ApplicationError(IllegalStateException("LAN device authentication is required; SMS registration is disabled"))
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
-    if (LocalAuthSessionRegistry.get(sessionId) != null) {
-      return RequestResult.Success(localPendingSession(sessionId))
+    if (localDeviceAuthClient.isChallengeSession(sessionId)) {
+      return RequestResult.Success(
+        SessionMetadata(sessionId, null, null, null, true, emptyList(), false)
+      )
     }
-    if (LocalAuthSessionRegistry.isLocalRegistrationSession(sessionId)) {
-      return RequestResult.Success(localVerifiedSession(sessionId))
+    if (localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
+      return RequestResult.Success(
+        SessionMetadata(sessionId, null, null, null, false, emptyList(), true)
+      )
     }
-    if (LocalServerConfigStore.load(context).localAuthEnabled) {
-      return RequestResult.ApplicationError(IllegalStateException("Unknown local registration session."))
-    }
-    return registrationApi.getSessionStatus(sessionId)
+    return RequestResult.ApplicationError(IllegalStateException("Non-LAN registration sessions are disabled"))
   }
 
   override suspend fun updateSession(
     sessionId: String,
-    pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
-    if (LocalAuthSessionRegistry.get(sessionId) != null) {
-      return RequestResult.Success(localPendingSession(sessionId))
+    if (localDeviceAuthClient.isChallengeSession(sessionId) || localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
+      return RequestResult.Success(
+        SessionMetadata(sessionId, null, null, null, false, emptyList(), localDeviceAuthClient.isCompletedLocalSession(sessionId))
+      )
     }
-    if (LocalAuthSessionRegistry.isLocalRegistrationSession(sessionId)) {
-      return RequestResult.Success(localVerifiedSession(sessionId))
-    }
-    if (LocalServerConfigStore.load(context).localAuthEnabled) {
-      return RequestResult.ApplicationError(IllegalStateException("Unknown local registration session."))
-    }
-    return registrationApi.updateVerificationSession(
-      sessionId = sessionId,
-      captchaToken = captchaToken,
-      pushChallengeToken = pushChallengeToken
-    )
+    return RequestResult.ApplicationError(IllegalStateException("Non-LAN verification sessions are disabled"))
   }
 
   override suspend fun requestVerificationCode(
@@ -225,72 +197,32 @@ class AppRegistrationNetworkController(
     androidSmsRetrieverSupported: Boolean,
     transport: VerificationCodeTransport
   ): RequestResult<SessionMetadata, RequestVerificationCodeError> {
-    val pending = LocalAuthSessionRegistry.get(sessionId)
-    if (pending != null) {
+    if (localDeviceAuthClient.isChallengeSession(sessionId)) {
       return try {
-        LocalAuthCodeBus.offer(pending.code)
-        RequestResult.Success(localPendingSession(sessionId).copy(allowedToRequestCode = false))
-      } catch (error: Exception) {
-        Log.w(TAG, "Could not hand off the local verification code to the registration screen.", error)
-        RequestResult.ApplicationError(error)
+        RequestResult.Success(localDeviceAuthClient.requestCode(sessionId))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        RequestResult.ApplicationError(e)
       }
     }
-    if (LocalServerConfigStore.load(context).localAuthEnabled) {
-      return RequestResult.ApplicationError(IllegalStateException("SMS and voice verification are disabled in LAN-only mode."))
-    }
-    return registrationApi.requestVerificationCode(sessionId, locale, androidSmsRetrieverSupported, transport)
+    return RequestResult.ApplicationError(IllegalStateException("SMS and voice verification transports are disabled"))
   }
 
   override suspend fun submitVerificationCode(
     sessionId: String,
     verificationCode: String
   ): RequestResult<SessionMetadata, SubmitVerificationCodeError> {
-    val pending = LocalAuthSessionRegistry.get(sessionId)
-    if (pending != null) {
-      return withContext(Dispatchers.IO) {
-        try {
-          val serverSessionId = LocalDeviceAuthClient(context).completeVerification(sessionId, verificationCode)
-          LocalAuthSessionRegistry.remove(sessionId)
-          RequestResult.Success(localVerifiedSession(serverSessionId))
-        } catch (error: CancellationException) {
-          throw error
-        } catch (error: Exception) {
-          Log.w(TAG, "Local device authorization rejected the submitted verification code.", error)
-          RequestResult.ApplicationError(error)
-        }
+    if (localDeviceAuthClient.isChallengeSession(sessionId)) {
+      return try {
+        RequestResult.Success(localDeviceAuthClient.submitCode(sessionId, verificationCode))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        RequestResult.ApplicationError(e)
       }
     }
-    if (LocalAuthSessionRegistry.isLocalRegistrationSession(sessionId)) {
-      return RequestResult.Success(localVerifiedSession(sessionId))
-    }
-    if (LocalServerConfigStore.load(context).localAuthEnabled) {
-      return RequestResult.ApplicationError(IllegalStateException("Unknown local verification session."))
-    }
-    return registrationApi.submitVerificationCode(sessionId, verificationCode)
-  }
-
-  private fun localPendingSession(challengeId: String): SessionMetadata {
-    return SessionMetadata(
-      id = challengeId,
-      nextSms = null,
-      nextCall = null,
-      nextVerificationAttempt = null,
-      allowedToRequestCode = true,
-      requestedInformation = emptyList(),
-      verified = false
-    )
-  }
-
-  private fun localVerifiedSession(serverSessionId: String): SessionMetadata {
-    return SessionMetadata(
-      id = serverSessionId,
-      nextSms = null,
-      nextCall = null,
-      nextVerificationAttempt = null,
-      allowedToRequestCode = false,
-      requestedInformation = emptyList(),
-      verified = true
-    )
+    return RequestResult.ApplicationError(IllegalStateException("Non-LAN verification sessions are disabled"))
   }
 
   override suspend fun registerAccount(
@@ -302,12 +234,24 @@ class AppRegistrationNetworkController(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
     webAuthnResponse: String?
   ): RequestResult<RegisterAccountResponse, RegisterAccountError> {
+    // Registration must be backed by the one-time LAN ticket returned by /complete.
+    // Do not let phone-numberless or recovery-password paths bypass device enrollment.
+    if (e164.isNullOrBlank() || sessionId.isNullOrBlank() || !localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
+      return RequestResult.ApplicationError(
+        IllegalStateException("A verified local device-authentication ticket is required to register this account")
+      )
+    }
+    if (!recoveryPassword.isNullOrBlank()) {
+      return RequestResult.ApplicationError(
+        IllegalStateException("Recovery-password registration is disabled in LAN-only mode")
+      )
+    }
+
     return registrationApi.registerAccount(
       e164 = e164,
       password = password,
@@ -317,7 +261,6 @@ class AppRegistrationNetworkController(
       attributes = attributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
@@ -361,37 +304,6 @@ class AppRegistrationNetworkController(
     } catch (e: VerificationFailedException) {
       Log.w(TAG, "Could not verify the receipt credential while building its presentation.", e)
       ReceiptCredentialResult.VerificationFailed
-    }
-  }
-
-  override suspend fun getFcmToken(): String? {
-    return try {
-      FcmUtil.getToken(context).orElse(null)
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to get FCM token", e)
-      null
-    }
-  }
-
-  override suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
-    try {
-      val latch = CountDownLatch(1)
-      val challenge = AtomicReference<String>()
-
-      val subscription = EventBus.default.subscribe<PushChallengeRequest.PushChallengeEvent> { event ->
-        challenge.set(event.challenge)
-        latch.countDown()
-      }
-
-      try {
-        latch.await(PUSH_REQUEST_TIMEOUT, TimeUnit.MILLISECONDS)
-        challenge.get()
-      } finally {
-        subscription.unsubscribe()
-      }
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to await push challenge token", e)
-      null
     }
   }
 
@@ -873,9 +785,8 @@ class AppRegistrationNetworkController(
     provisioningCode: String,
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
-    pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
-  ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
+    pniPreKeys: PreKeyCollection?
+    ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
     return registrationApi.registerAsSecondaryDevice(
       aci = aci,
       password = password,
@@ -883,7 +794,6 @@ class AppRegistrationNetworkController(
       attributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
     )
   }
 

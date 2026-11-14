@@ -16,9 +16,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.signal.core.ui.logging.LoggingFragment
-import org.signal.core.util.eventbus.EventBus
-import org.signal.core.util.eventbus.RestartableSubscription
-import org.signal.core.util.eventbus.ThreadMode
 import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.components.ViewBinderDelegate
@@ -27,12 +24,12 @@ import org.thoughtcrime.securesms.components.settings.insetForSafeAreaWithKeyboa
 import org.thoughtcrime.securesms.databinding.FragmentChangeNumberEnterCodeBinding
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.registration.data.RegistrationRepository
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.registration.data.network.RegistrationResult
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
 import org.thoughtcrime.securesms.registration.fragments.ContactSupportBottomSheetFragment
 import org.thoughtcrime.securesms.registration.fragments.RegistrationViewDelegate
 import org.thoughtcrime.securesms.registration.fragments.SignalStrengthPhoneStateListener
-import org.thoughtcrime.securesms.registration.sms.ReceivedSmsEvent
 import org.thoughtcrime.securesms.util.concurrent.AssertedSuccessListener
 import org.thoughtcrime.securesms.util.navigation.safeNavigate
 import org.thoughtcrime.securesms.util.visible
@@ -54,6 +51,7 @@ class ChangeNumberEnterCodeFragment : LoggingFragment(R.layout.fragment_change_n
   private lateinit var phoneStateListener: SignalStrengthPhoneStateListener
 
   private var autopilotCodeEntryActive = false
+  private var lastLocalAuthCode = ""
 
   private val bottomSheet = ContactSupportBottomSheetFragment()
 
@@ -82,9 +80,6 @@ class ChangeNumberEnterCodeFragment : LoggingFragment(R.layout.fragment_change_n
 
     RegistrationViewDelegate.setDebugLogSubmitMultiTapView(binding.codeEntryLayout.verifyHeader)
 
-    RestartableSubscription { EventBus.default.subscribe<ReceivedSmsEvent>(ThreadMode.MAIN, ::onVerificationCodeReceived) }
-      .bindTo(viewLifecycleOwner, Lifecycle.State.CREATED)
-
     phoneStateListener = SignalStrengthPhoneStateListener(this, PhoneStateCallback())
 
     binding.codeEntryLayout.wrongNumber.setOnClickListener {
@@ -93,6 +88,13 @@ class ChangeNumberEnterCodeFragment : LoggingFragment(R.layout.fragment_change_n
 
     binding.codeEntryLayout.code.setOnCompleteListener {
       viewModel.verifyCodeWithoutRegistrationLock(requireContext(), it, ::handleSessionErrorResponse, ::handleChangeNumberErrorResponse)
+    }
+
+    val localAuthOnly = LocalServerConfig.load(requireContext()).localAuthOnly
+    if (localAuthOnly) {
+      binding.codeEntryLayout.callMeCountDown.visibility = View.GONE
+      binding.codeEntryLayout.resendSmsCountDown.visibility = View.GONE
+      binding.codeEntryLayout.havingTroubleButton.visibility = View.GONE
     }
 
     binding.codeEntryLayout.havingTroubleButton.setOnClickListener {
@@ -133,6 +135,16 @@ class ChangeNumberEnterCodeFragment : LoggingFragment(R.layout.fragment_change_n
   }
 
   private fun onStateUpdate(state: ChangeNumberState) {
+    if (LocalServerConfig.load(requireContext()).localAuthOnly) {
+      binding.codeEntryLayout.callMeCountDown.visibility = View.GONE
+      binding.codeEntryLayout.resendSmsCountDown.visibility = View.GONE
+      binding.codeEntryLayout.havingTroubleButton.visibility = View.GONE
+      val code = state.enteredCode
+      if (!state.inProgress && !code.isNullOrBlank() && code != lastLocalAuthCode) {
+        lastLocalAuthCode = code
+        onLocalAuthCodeReceived(code)
+      }
+    }
     binding.codeEntryLayout.resendSmsCountDown.startCountDownTo(state.nextSmsTimestamp.milliseconds)
     binding.codeEntryLayout.callMeCountDown.startCountDownTo(state.nextCallTimestamp.milliseconds)
     when (val outcome = state.changeNumberOutcome) {
@@ -278,29 +290,27 @@ class ChangeNumberEnterCodeFragment : LoggingFragment(R.layout.fragment_change_n
     )
   }
 
-  private fun onVerificationCodeReceived(event: ReceivedSmsEvent) {
+  private fun onLocalAuthCodeReceived(code: String) {
     binding.codeEntryLayout.code.clear()
 
-    if (event.code.isBlank() || event.code.length != ReceivedSmsEvent.CODE_LENGTH) {
-      Log.i(TAG, "Received invalid code of length ${event.code.length}. Ignoring.")
+    if (code.isBlank() || code.length != 6 || !code.all(Char::isDigit)) {
+      Log.i(TAG, "Received invalid local authentication code. Ignoring.")
       return
     }
 
-    val finalIndex = ReceivedSmsEvent.CODE_LENGTH - 1
+    val finalIndex = code.length - 1
     autopilotCodeEntryActive = true
     try {
-      event.code
-        .map { it.digitToInt() }
-        .forEachIndexed { i, digit ->
-          binding.codeEntryLayout.code.postDelayed({
-            binding.codeEntryLayout.code.append(digit)
-            if (i == finalIndex) {
-              autopilotCodeEntryActive = false
-            }
-          }, i * 200L)
-        }
+      code.map { it.digitToInt() }.forEachIndexed { index, digit ->
+        binding.codeEntryLayout.code.postDelayed({
+          binding.codeEntryLayout.code.append(digit)
+          if (index == finalIndex) {
+            autopilotCodeEntryActive = false
+          }
+        }, index * 200L)
+      }
     } catch (notADigit: IllegalArgumentException) {
-      Log.w(TAG, "Failed to convert code into digits.", notADigit)
+      Log.w(TAG, "Failed to convert local authentication code into digits.", notADigit)
       autopilotCodeEntryActive = false
     }
   }

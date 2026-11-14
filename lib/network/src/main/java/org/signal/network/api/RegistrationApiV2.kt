@@ -70,7 +70,7 @@ class RegistrationApiV2(
    * - 422: Request is invalid
    * - 429: Rate limited
    */
-  suspend fun createVerificationSession(e164: String, fcmToken: String?, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError> {
+  suspend fun createVerificationSession(e164: String, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError> {
     val result = restClient.request(
       RequestSpec(
         method = RequestSpec.Method.POST,
@@ -78,8 +78,6 @@ class RegistrationApiV2(
         path = "/v1/verification/session",
         body = CreateVerificationSessionRequestBody(
           number = e164,
-          pushToken = fcmToken,
-          pushTokenType = if (fcmToken != null) "fcm" else null,
           mcc = mcc,
           mnc = mnc
         ).toJsonRequestBody()
@@ -142,11 +140,9 @@ class RegistrationApiV2(
    */
   suspend fun updateVerificationSession(
     sessionId: String,
-    fcmToken: String? = null,
     mcc: String? = null,
     mnc: String? = null,
     captchaToken: String? = null,
-    pushChallengeToken: String? = null
   ): RequestResult<SessionMetadata, UpdateSessionError> {
     val result = restClient.request(
       RequestSpec(
@@ -155,9 +151,6 @@ class RegistrationApiV2(
         path = "/v1/verification/session/$sessionId",
         body = UpdateVerificationSessionRequestBody(
           captcha = captchaToken,
-          pushToken = fcmToken,
-          pushTokenType = if (fcmToken != null) "fcm" else null,
-          pushChallenge = pushChallengeToken,
           mcc = mcc,
           mnc = mnc
         ).toJsonRequestBody()
@@ -318,7 +311,6 @@ class RegistrationApiV2(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI? = null,
     totp: Int? = null,
@@ -358,7 +350,6 @@ class RegistrationApiV2(
       pniSignedPreKey = pniPreKeys?.signedPreKey?.toSignedPreKeyEntity(),
       aciPqLastResortPreKey = aciPreKeys.lastResortKyberPreKey.toKyberPreKeyEntity(),
       pniPqLastResortPreKey = pniPreKeys?.lastResortKyberPreKey?.toKyberPreKeyEntity(),
-      gcmToken = if (attributes.fetchesMessages) null else fcmToken?.let { GcmRegistrationId(it, true) },
       skipDeviceTransfer = skipDeviceTransfer
     )
 
@@ -569,7 +560,6 @@ class RegistrationApiV2(
     attributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
     val request = RegisterAsSecondaryDeviceRequestBody(
       verificationCode = verificationCode,
@@ -578,7 +568,6 @@ class RegistrationApiV2(
       pniSignedPreKey = pniPreKeys?.signedPreKey?.toSignedPreKeyEntity(),
       aciPqLastResortPreKey = aciPreKeys.lastResortKyberPreKey.toKyberPreKeyEntity(),
       pniPqLastResortPreKey = pniPreKeys?.lastResortKyberPreKey?.toKyberPreKeyEntity(),
-      gcmToken = fcmToken?.let { GcmRegistrationId(it, true) }
     )
 
     val result = restClient.request(
@@ -911,8 +900,6 @@ class RegistrationApiV2(
   @Serializable
   private class CreateVerificationSessionRequestBody(
     val number: String,
-    val pushToken: String? = null,
-    val pushTokenType: String? = null,
     val mcc: String? = null,
     val mnc: String? = null
   )
@@ -920,9 +907,6 @@ class RegistrationApiV2(
   @Serializable
   private class UpdateVerificationSessionRequestBody(
     val captcha: String? = null,
-    val pushToken: String? = null,
-    val pushTokenType: String? = null,
-    val pushChallenge: String? = null,
     val mcc: String? = null,
     val mnc: String? = null
   )
@@ -957,7 +941,6 @@ class RegistrationApiV2(
     val pniSignedPreKey: SignedPreKeyEntity?,
     val aciPqLastResortPreKey: KyberPreKeyEntity,
     val pniPqLastResortPreKey: KyberPreKeyEntity?,
-    val gcmToken: GcmRegistrationId? = null,
     val skipDeviceTransfer: Boolean,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val requireAtomic: Boolean = true
@@ -985,18 +968,11 @@ class RegistrationApiV2(
     val pniSignedPreKey: SignedPreKeyEntity? = null,
     val aciPqLastResortPreKey: KyberPreKeyEntity,
     val pniPqLastResortPreKey: KyberPreKeyEntity? = null,
-    val gcmToken: GcmRegistrationId? = null
   )
 
   @Serializable
   private class RestoreMethodBody(
     val method: RestoreMethod
-  )
-
-  @Serializable
-  private class GcmRegistrationId(
-    val gcmRegistrationId: String,
-    val webSocketChannel: Boolean
   )
 
   @Serializable

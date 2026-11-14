@@ -95,6 +95,7 @@
     <string name="VerificationCodeScreen__verification_code">Verification code</string>
     <!-- Subtitle explaining where the code was sent. Placeholder is the phone number -->
     <string name="VerificationCodeScreen__enter_the_code_we_sent_to_s">Enter the code we sent to %s</string>
+    <string name="VerificationCodeScreen__local_server_verification_for_s">Your local server is verifying this device for %s. The code will be filled automatically.</string>
     <!-- Button text for wrong number action -->
     <string name="VerificationCodeScreen__wrong_number">Wrong number?</string>
     <!-- Button text for resend SMS action -->
