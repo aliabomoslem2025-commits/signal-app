@@ -88,6 +88,7 @@ import org.thoughtcrime.securesms.jobs.DownloadLatestEmojiDataJob;
 import org.thoughtcrime.securesms.jobs.EmojiSearchIndexDownloadJob;
 import org.thoughtcrime.securesms.jobs.FcmRefreshJob;
 import org.thoughtcrime.securesms.jobs.FontDownloaderJob;
+import org.thoughtcrime.securesms.registration.localauth.LocalDeviceEnrollmentActivity;
 import org.thoughtcrime.securesms.jobs.GroupRingCleanupJob;
 import org.thoughtcrime.securesms.jobs.GroupV2UpdateSelfProfileKeyJob;
 import org.thoughtcrime.securesms.jobs.InAppPaymentAuthCheckJob;
@@ -469,7 +470,11 @@ public class ApplicationContext extends Application implements AppForegroundObse
           context.startActivity(EditProxyActivity.intent(context));
           return Unit.INSTANCE;
         },
-        new AppContactSupportController()
+        new AppContactSupportController(),
+        (context, phoneNumber) -> context.startActivity(
+            new Intent(context, LocalDeviceEnrollmentActivity.class)
+                .putExtra(LocalDeviceEnrollmentActivity.EXTRA_PHONE_NUMBER, phoneNumber)
+        )
       )
     );
   }
