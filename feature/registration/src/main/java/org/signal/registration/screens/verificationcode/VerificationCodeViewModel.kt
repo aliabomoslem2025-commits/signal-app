@@ -38,6 +38,7 @@ import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
 import org.signal.registration.RegistrationRoute
+import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.screens.util.navigateBack
 import org.signal.registration.screens.util.navigateTo
 import org.signal.uicomponents.codeentryfield.CodeEntryFieldAction
@@ -130,6 +131,12 @@ class VerificationCodeViewModel(
 
     viewModelScope.launch {
       smsCodeEvents.collect { code ->
+        onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+      }
+    }
+
+    viewModelScope.launch {
+      LocalAuthCodeBus.codes.collect { code ->
         onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
       }
     }
