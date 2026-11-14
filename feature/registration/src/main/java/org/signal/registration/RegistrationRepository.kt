@@ -1159,10 +1159,8 @@ class RegistrationRepository(
       }
     }
 
-    val fcmToken = networkController.getFcmToken()
-
     updateAccountData {
-      this.fetchesMessages = fcmToken == null
+      this.fetchesMessages = true
     }
 
     val newMasterKey = keyMaterial.accountEntropyPool.deriveMasterKey()
@@ -1185,7 +1183,7 @@ class RegistrationRepository(
       registrationId = keyMaterial.aciRegistrationId,
       voice = true,
       video = true,
-      fetchesMessages = fcmToken == null,
+      fetchesMessages = true,
       registrationLock = registrationLock,
       unidentifiedAccessKey = keyMaterial.unidentifiedAccessKey,
       unrestrictedUnidentifiedAccess = unrestrictedUnidentifiedAccess,
