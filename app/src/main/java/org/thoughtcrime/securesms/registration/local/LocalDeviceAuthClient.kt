@@ -33,7 +33,7 @@ class LocalDeviceAuthClient(context: Context) {
 
   fun isCompletedLocalSession(sessionId: String): Boolean {
     return try {
-      val bytes = Base64.decode(sessionId, Base64.DEFAULT)
+      val bytes = Base64.decode(sessionId, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
       String(bytes, StandardCharsets.UTF_8).startsWith("LAN1.")
     } catch (_: IllegalArgumentException) {
       false
