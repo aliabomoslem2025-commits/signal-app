@@ -18,6 +18,7 @@ class LocalServerConfig private constructor(
     private const val PREFS = "local_server_configuration"
     private const val KEY_CONFIG = "config_json"
 
+    @JvmStatic
     fun load(context: Context): LocalServerConfig {
       val appContext = context.applicationContext
       val prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
