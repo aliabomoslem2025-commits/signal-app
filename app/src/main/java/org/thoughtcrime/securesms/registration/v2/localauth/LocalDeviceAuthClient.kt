@@ -48,7 +48,7 @@ class LocalDeviceAuthClient(context: Context) {
     })
     val challengeId = challenge.getString("challengeId")
     val nonce = challenge.getString("nonce")
-    val canonicalMessage = "signal-local-auth-v1\\n$challengeId\\n$e164\\n$nonce"
+    val canonicalMessage = "signal-local-auth-v1\n$challengeId\n$e164\n$nonce"
     val signer = Signature.getInstance("SHA256withECDSA")
     signer.initSign(keyPair.private)
     signer.update(canonicalMessage.toByteArray(Charsets.UTF_8))
@@ -81,9 +81,9 @@ class LocalDeviceAuthClient(context: Context) {
   fun exportEnrollmentJson(): String {
     val keyPair = getOrCreateKeyPair()
     val pem = buildString {
-      append("-----BEGIN PUBLIC KEY-----\\n")
+      append("-----BEGIN PUBLIC KEY-----\n")
       append(Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP))
-      append("\\n-----END PUBLIC KEY-----")
+      append("\n-----END PUBLIC KEY-----")
     }
     return JSONObject().apply {
       put("androidId", getAndroidId())
