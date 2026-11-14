@@ -220,7 +220,9 @@ object RegistrationRepository {
     AppDependencies.recipientCache.clearSelf()
 
     SignalStore.account.setE164(data.e164)
-    SignalStore.account.ntfyEnabled = data.fcmEnabled
+    val registeredNtfyTopic = data.ntfyTopic.takeIf { it.matches(Regex("signal-[A-Za-z0-9_-]{32,64}")) }
+    SignalStore.account.ntfyTopic = registeredNtfyTopic
+    SignalStore.account.ntfyEnabled = registeredNtfyTopic != null
 
     val now = System.currentTimeMillis()
     saveOwnIdentityKey(selfId, aci, aciProtocolStore, now)
