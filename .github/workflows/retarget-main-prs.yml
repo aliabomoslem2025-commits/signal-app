@@ -41,8 +41,8 @@ jobs:
 
         TARGET="$(gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | { grep -E '^[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n 1)"
         if [ -z "$TARGET" ]; then
-          echo "::error::Pull requests should not target main, and no release branch was found to retarget to."
-          exit 1
+          echo "::notice::This fork has no numbered release branches; main remains the canonical development base."
+          exit 0
         fi
 
         if gh api -X PATCH "repos/$REPO/pulls/$PR_NUMBER" -f base="$TARGET" > /dev/null; then
