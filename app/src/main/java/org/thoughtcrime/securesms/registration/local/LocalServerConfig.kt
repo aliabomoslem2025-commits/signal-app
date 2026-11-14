@@ -68,6 +68,9 @@ class LocalServerConfig private constructor(
   fun importJson(json: String) {
     val parsed = JSONObject(json)
     require(parsed.optInt("schemaVersion") == 1) { "Unsupported server-config.json schemaVersion" }
+    require(parsed.optBoolean("localAuthOnly", true)) {
+      "This LAN build requires localAuthOnly=true; SMS and public Signal registration are disabled"
+    }
     val security = parsed.optJSONObject("security") ?: JSONObject()
     require(security.optBoolean("requireHttps", true)) {
       "LAN deployments must require HTTPS"
