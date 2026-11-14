@@ -30,7 +30,7 @@ class LocalDeviceAuthClient(context: Context) {
   val isEnabled: Boolean
     get() = config.localAuthOnly
 
-  fun isChallengeSession(sessionId: String): Boolean = sessionId.startsWith(CHALLENGE_PREFIX)
+  fun isChallengeSession(sessionId: String): Boolean = sessionId.startsWith(LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX)
 
   fun isCompletedLocalSession(sessionId: String): Boolean {
     return try {
@@ -61,7 +61,7 @@ class LocalDeviceAuthClient(context: Context) {
       Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
     )
     SessionMetadata(
-      id = CHALLENGE_PREFIX + encodedState,
+      id = LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX + encodedState,
       nextSms = null,
       nextCall = null,
       nextVerificationAttempt = null,
@@ -121,7 +121,7 @@ class LocalDeviceAuthClient(context: Context) {
 
   private fun decodeState(sessionId: String): JSONObject {
     require(isChallengeSession(sessionId)) { "Not a local authentication challenge" }
-    val encoded = sessionId.removePrefix(CHALLENGE_PREFIX)
+    val encoded = sessionId.removePrefix(LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX)
     val bytes = Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     return JSONObject(String(bytes, StandardCharsets.UTF_8))
   }
@@ -174,7 +174,4 @@ class LocalDeviceAuthClient(context: Context) {
     }
   }
 
-  companion object {
-    private const val CHALLENGE_PREFIX = "LOCAL1."
-  }
 }
