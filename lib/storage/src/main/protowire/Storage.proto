@@ -62,8 +62,8 @@ message LocalRegistrationMetadata {
     optional string pin = 10;
     optional bytes masterKey = 11;
     string e164 = 12;
-    bool fcmEnabled = 13;
-    string fcmToken = 14;
+    bool ntfyEnabled = 13;
+    string ntfyTopic = 14;
     bytes profileKey = 15;
     string servicePassword = 16;
     bool reglockEnabled = 17;
