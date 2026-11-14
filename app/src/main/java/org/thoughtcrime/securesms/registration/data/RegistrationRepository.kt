@@ -44,7 +44,6 @@ import org.thoughtcrime.securesms.crypto.storage.SignalServiceAccountDataStoreIm
 import org.thoughtcrime.securesms.database.IdentityTable
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobmanager.runJobBlocking
 import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob
 import org.thoughtcrime.securesms.jobs.DirectoryRefreshJob
@@ -69,7 +68,9 @@ import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionC
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionCreationResult
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionResult
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
+import org.thoughtcrime.securesms.registration.ntfy.PushChallengeRequest
+import org.thoughtcrime.securesms.push.ntfy.NtfyTopicManager
+import org.thoughtcrime.securesms.push.ntfy.NtfySubscriptionService
 import org.thoughtcrime.securesms.registration.viewmodel.SvrAuthCredentialSet
 import org.thoughtcrime.securesms.service.DirectoryRefreshListener
 import org.thoughtcrime.securesms.service.RotateSignedPreKeyListener
@@ -89,7 +90,6 @@ import org.whispersystems.signalservice.internal.push.VerifyAccountResponse
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.util.Locale
-import java.util.Optional
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
@@ -107,10 +107,15 @@ object RegistrationRepository {
   private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
 
   /**
-   * Retrieve the FCM token from the Firebase service.
+   * Gets this device's opaque ntfy topic and ensures its authenticated stream is connected
+   * before the server is asked to publish a registration challenge.
    */
-  suspend fun getFcmToken(context: Context): String? = withContext(Dispatchers.Default) {
-    FcmUtil.getToken(context).orElse(null)
+  suspend fun getNtfyTopic(context: Context): String = withContext(Dispatchers.IO) {
+    val topic = NtfyTopicManager.getOrCreate(context)
+    if (!NtfySubscriptionService.awaitConnected(15_000L)) {
+      throw IOException("Unable to connect to the configured ntfy server")
+    }
+    topic
   }
 
   /**
@@ -215,7 +220,8 @@ object RegistrationRepository {
     AppDependencies.recipientCache.clearSelf()
 
     SignalStore.account.setE164(data.e164)
-    SignalStore.account.fcmToken = data.fcmToken
+    SignalStore.account.ntfyTopic = data.ntfyTopic
+    SignalStore.account.ntfyEnabled = data.isNtfy
     SignalStore.account.fcmEnabled = data.fcmEnabled
 
     val now = System.currentTimeMillis()
@@ -321,15 +327,14 @@ object RegistrationRepository {
    */
   suspend fun createSession(context: Context, e164: String, password: String, mcc: String?, mnc: String?): RegistrationSessionCreationResult = withContext(Dispatchers.IO) {
     Log.d(TAG, "About to create a registration session…")
-    val fcmToken: String? = FcmUtil.getToken(context).orElse(null)
+    val ntfyTopic = getNtfyTopic(context)
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
 
-    val registrationSessionResult = if (fcmToken == null) {
-      Log.d(TAG, "Creating registration session without FCM token.")
-      api.createRegistrationSession(null, mcc, mnc)
+    val registrationSessionResult = if (ntfyTopic.isBlank()) {
+      throw IOException("The local ntfy topic is unavailable")
     } else {
-      Log.d(TAG, "Creating registration session with FCM token.")
-      createSessionAndBlockForPushChallenge(api, fcmToken, mcc, mnc)
+      Log.d(TAG, "Creating registration session with ntfy topic.")
+      createSessionAndBlockForPushChallenge(api, ntfyTopic, mcc, mnc)
     }
     val result = RegistrationSessionCreationResult.from(registrationSessionResult)
     if (result is RegistrationSessionCreationResult.Success) {
@@ -404,9 +409,9 @@ object RegistrationRepository {
   }
 
   suspend fun requestAndVerifyPushToken(context: Context, sessionId: String, e164: String, password: String) = withContext(Dispatchers.IO) {
-    val fcmToken = getFcmToken(context)
+    val ntfyTopic = getNtfyTopic(context)
     val accountManager = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password)
-    val pushChallenge = PushChallengeRequest.getPushChallengeBlocking(accountManager, sessionId, Optional.ofNullable(fcmToken), PUSH_REQUEST_TIMEOUT).orElse(null)
+    val pushChallenge = PushChallengeRequest.getPushChallengeBlocking(accountManager, sessionId, ntfyTopic, PUSH_REQUEST_TIMEOUT).orElse(null)
     val pushSubmissionResult = accountManager.registrationApi.submitPushChallengeToken(sessionId = sessionId, pushChallengeToken = pushChallenge)
     return@withContext VerificationCodeRequestResult.from(pushSubmissionResult)
   }
@@ -437,7 +442,7 @@ object RegistrationRepository {
     val accountAttributes = AccountAttributes(
       signalingKey = null,
       registrationId = registrationData.registrationId,
-      fetchesMessages = registrationData.isNotFcm,
+      fetchesMessages = registrationData.isNotNtfy,
       registrationLock = registrationLock,
       unidentifiedAccessKey = unidentifiedAccessKey,
       unrestrictedUnidentifiedAccess = universalUnidentifiedAccess,
@@ -457,7 +462,7 @@ object RegistrationRepository {
     val aciPreKeyCollection = generateSignedAndLastResortPreKeys(aciIdentity, SignalStore.account.aciPreKeys)
     val pniPreKeyCollection = generateSignedAndLastResortPreKeys(pniIdentity, SignalStore.account.pniPreKeys)
 
-    val result: NetworkResult<AccountRegistrationResult> = api.registerAccount(sessionId, registrationData.recoveryPassword, accountAttributes, aciPreKeyCollection, pniPreKeyCollection, registrationData.fcmToken, true)
+    val result: NetworkResult<AccountRegistrationResult> = api.registerAccount(sessionId, registrationData.recoveryPassword, accountAttributes, aciPreKeyCollection, pniPreKeyCollection, registrationData.ntfyTopic, true)
       .map { accountRegistrationResponse: VerifyAccountResponse ->
         AccountRegistrationResult(
           uuid = accountRegistrationResponse.uuid!!,
@@ -555,14 +560,14 @@ object RegistrationRepository {
       }
   }
 
-  private suspend fun createSessionAndBlockForPushChallenge(accountManager: RegistrationApi, fcmToken: String, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> = withContext(Dispatchers.IO) {
+  private suspend fun createSessionAndBlockForPushChallenge(accountManager: RegistrationApi, ntfyTopic: String, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> = withContext(Dispatchers.IO) {
     // TODO [regv2]: do not use event bus nor latch
     val subscriber = PushTokenChallengeSubscriber()
     val subscription = EventBus.default.subscribe<PushChallengeRequest.PushChallengeEvent>(handler = subscriber::onChallengeEvent)
 
     try {
-      Log.d(TAG, "Requesting a registration session with FCM token…")
-      val sessionCreationResponse = accountManager.createRegistrationSession(fcmToken, mcc, mnc)
+      Log.d(TAG, "Requesting a registration session with ntfy topic…")
+      val sessionCreationResponse = accountManager.createRegistrationSession(ntfyTopic, mcc, mnc)
       if (sessionCreationResponse !is NetworkResult.Success) {
         return@withContext sessionCreationResponse
       }
