@@ -55,6 +55,8 @@ class AccountValues internal constructor(store: KeyValueStore, context: Context)
     private const val KEY_FCM_TOKEN = "account.fcm_token"
     private const val KEY_FCM_TOKEN_VERSION = "account.fcm_token_version"
     private const val KEY_FCM_TOKEN_LAST_SET_TIME = "account.fcm_token_last_set_time"
+    private const val KEY_NTFY_ENABLED = "account.ntfy_enabled"
+    private const val KEY_NTFY_TOPIC = "account.ntfy_topic"
     private const val KEY_DEVICE_NAME = "account.device_name"
     private const val KEY_DEVICE_ID = "account.device_id"
     private const val KEY_PNI_REGISTRATION_ID = "account.pni_registration_id"
@@ -508,6 +510,19 @@ class AccountValues internal constructor(store: KeyValueStore, context: Context)
   /** When we last set the [fcmToken] */
   val fcmTokenLastSetTime: Long
     get() = getLong(KEY_FCM_TOKEN_LAST_SET_TIME, 0)
+
+  /** Whether this device is enrolled for private, self-hosted ntfy wake-up hints. */
+  var ntfyEnabled: Boolean by booleanValue(KEY_NTFY_ENABLED, false)
+
+  /**
+   * Opaque per-device ntfy topic. It is not a message identifier and must never be derived
+   * from the phone number, Android ID, ACI or PNI.
+   */
+  var ntfyTopic: String?
+    get() = getString(KEY_NTFY_TOPIC, null)
+    set(value) {
+      store.beginWrite().putString(KEY_NTFY_TOPIC, value).apply()
+    }
 
   /** Whether or not the user is registered with the Signal service. */
   val isRegistered: Boolean
