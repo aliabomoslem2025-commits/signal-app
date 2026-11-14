@@ -37,6 +37,24 @@ class LocalServerConfig private constructor(
   val trustedCaPem: String
     get() = defaults.optString("trustedCaPem").trim()
 
+  val ntfyReaderToken: String
+    get() = defaults.optString("ntfyReaderToken").trim()
+
+  val ntfyBaseUrl: String?
+    get() {
+      val services = defaults.optJSONObject("services") ?: JSONObject()
+      return services.optString("ntfy").takeIf { it.isNotBlank() }?.let(::normalizedEndpoint)
+    }
+
+  val isNtfyPushConfigured: Boolean
+    get() = !ntfyBaseUrl.isNullOrBlank() && ntfyReaderToken.isNotBlank()
+
+  fun saveNtfyReaderToken(value: String) {
+    require(value.isNotBlank()) { "A read-only ntfy token is required" }
+    defaults.put("ntfyReaderToken", value.trim())
+    persist()
+  }
+
   fun endpoint(module: String): String {
     val services = defaults.optJSONObject("services") ?: JSONObject()
     val value = services.optString(module)
@@ -84,7 +102,12 @@ class LocalServerConfig private constructor(
     persist()
   }
 
-  fun exportJson(): String = defaults.toString(2)
+  fun exportJson(): String {
+    // The ntfy reader token is a device credential; never include it in exported config bundles.
+    val exported = JSONObject(defaults.toString())
+    exported.remove("ntfyReaderToken")
+    return exported.toString(2)
+  }
 
   fun importJson(json: String) {
     val parsed = JSONObject(json)
@@ -107,7 +130,7 @@ class LocalServerConfig private constructor(
       }
     }
     val services = parsed.optJSONObject("services") ?: JSONObject()
-    val names = listOf("signal", "storage", "cdn0", "cdn2", "cdn3", "cdsi", "svr2", "svrb", "attachments", "sfu")
+    val names = listOf("signal", "storage", "cdn0", "cdn2", "cdn3", "cdsi", "svr2", "svrb", "attachments", "sfu", "ntfy")
     names.forEach { name ->
       val value = services.optString(name)
       if (value.isNotBlank()) normalizedEndpoint(value)
