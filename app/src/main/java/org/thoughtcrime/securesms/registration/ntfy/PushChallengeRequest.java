@@ -10,13 +10,16 @@ import androidx.annotation.WorkerThread;
 
 import org.signal.core.util.eventbus.EventBus;
 import org.signal.core.util.logging.Log;
+import org.whispersystems.signalservice.api.SignalServiceAccountManager;
 
+import java.io.IOException;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+/** Performs Signal's existing registration push challenge over the ntfy transport. */
 public final class PushChallengeRequest {
 
   private static final String TAG = Log.tag(PushChallengeRequest.class);
@@ -24,8 +27,9 @@ public final class PushChallengeRequest {
   private PushChallengeRequest() {}
 
   @WorkerThread
-  public static Optional<String> getPushChallengeBlocking(@NonNull String ntfyTopic,
+  public static Optional<String> getPushChallengeBlocking(@NonNull SignalServiceAccountManager accountManager,
                                                           @NonNull String sessionId,
+                                                          @NonNull String ntfyTopic,
                                                           long timeoutMs) {
     if (ntfyTopic.isEmpty()) {
       Log.w(TAG, "Push challenge not requested because the ntfy topic is missing");
@@ -33,8 +37,8 @@ public final class PushChallengeRequest {
     }
 
     final long startTime = System.currentTimeMillis();
-    final Request request = new Request(timeoutMs);
-    final Optional<String> challenge = request.awaitChallenge();
+    final Request request = new Request(accountManager, ntfyTopic, sessionId, timeoutMs);
+    final Optional<String> challenge = request.requestAndReceiveChallengeBlocking();
 
     final long duration = System.currentTimeMillis() - startTime;
     if (challenge.isPresent()) {
@@ -52,21 +56,35 @@ public final class PushChallengeRequest {
   private static final class Request {
     private final CountDownLatch latch = new CountDownLatch(1);
     private final AtomicReference<String> challenge = new AtomicReference<>();
+    private final SignalServiceAccountManager accountManager;
+    private final String ntfyTopic;
+    private final String sessionId;
     private final long timeoutMs;
 
-    private Request(long timeoutMs) {
+    private Request(@NonNull SignalServiceAccountManager accountManager,
+                    @NonNull String ntfyTopic,
+                    @NonNull String sessionId,
+                    long timeoutMs) {
+      this.accountManager = accountManager;
+      this.ntfyTopic = ntfyTopic;
+      this.sessionId = sessionId;
       this.timeoutMs = timeoutMs;
     }
 
-    private Optional<String> awaitChallenge() {
+    @WorkerThread
+    private Optional<String> requestAndReceiveChallengeBlocking() {
       final EventBus.Subscription subscription = EventBus.getDefault().subscribe(
           PushChallengeEvent.class, this::onChallengeEvent);
       try {
+        accountManager.requestRegistrationPushChallenge(sessionId, ntfyTopic);
         latch.await(timeoutMs, TimeUnit.MILLISECONDS);
         return Optional.ofNullable(challenge.get());
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         Log.w(TAG, "Interrupted while waiting for ntfy registration challenge", e);
+        return Optional.empty();
+      } catch (IOException e) {
+        Log.w(TAG, "Unable to request ntfy registration challenge", e);
         return Optional.empty();
       } finally {
         subscription.unsubscribe();
