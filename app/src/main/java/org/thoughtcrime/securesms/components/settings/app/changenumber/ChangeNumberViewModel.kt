@@ -22,12 +22,13 @@ import org.signal.core.util.logging.Log
 import org.thoughtcrime.securesms.dependencies.AppDependencies
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.registration.data.RegistrationData
+import org.signal.registration.LocalAuthCodeBus
 import org.thoughtcrime.securesms.registration.data.RegistrationRepository
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.registration.data.network.Challenge
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionCreationResult
 import org.thoughtcrime.securesms.registration.data.network.SessionMetadataResult
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
-import org.thoughtcrime.securesms.registration.sms.SmsRetrieverReceiver
 import org.thoughtcrime.securesms.registration.ui.RegistrationViewModel
 import org.thoughtcrime.securesms.registration.ui.countrycode.Country
 import org.thoughtcrime.securesms.registration.viewmodel.NumberViewState
@@ -49,7 +50,6 @@ class ChangeNumberViewModel : ViewModel() {
 
   private val repository = ChangeNumberRepository()
   private val store = MutableStateFlow(ChangeNumberState())
-  private val smsRetrieverReceiver: SmsRetrieverReceiver = SmsRetrieverReceiver(AppDependencies.application)
 
   private val initialLocalNumber = SignalStore.account.e164
   private val password = SignalStore.account.servicePassword!!
@@ -78,12 +78,15 @@ class ChangeNumberViewModel : ViewModel() {
       Log.i(TAG, "Unable to parse number for default country code")
     }
 
-    smsRetrieverReceiver.registerReceiver()
-  }
-
-  override fun onCleared() {
-    super.onCleared()
-    smsRetrieverReceiver.unregisterReceiver()
+    if (LocalServerConfig.load(AppDependencies.application).localAuthOnly) {
+      viewModelScope.launch {
+        LocalAuthCodeBus.codes.collect { code ->
+          if (store.value.sessionId == code.challengeSessionId) {
+            store.update { it.copy(enteredCode = code.value) }
+          }
+        }
+      }
+    }
   }
 
   // region Public Getters and Setters
@@ -229,14 +232,6 @@ class ChangeNumberViewModel : ViewModel() {
     }
   }
 
-  fun registerSmsListenerWithCompletionListener(context: Context, onComplete: (Boolean) -> Unit) {
-    Log.v(TAG, "registerSmsListenerWithCompletionListener()")
-    viewModelScope.launch {
-      val listenerRegistered = RegistrationRepository.registerSmsListener(context)
-      onComplete(listenerRegistered)
-    }
-  }
-
   fun verifyCodeWithoutRegistrationLock(context: Context, code: String, verificationErrorHandler: (VerificationCodeRequestResult) -> Unit, numberChangeErrorHandler: (ChangeNumberResult) -> Unit) {
     Log.v(TAG, "verifyCodeWithoutRegistrationLock()")
     store.update {
@@ -262,7 +257,7 @@ class ChangeNumberViewModel : ViewModel() {
 
   private suspend fun verifyCodeInternal(context: Context, pin: String?, verificationErrorHandler: (VerificationCodeRequestResult) -> Unit, numberChangeErrorHandler: (ChangeNumberResult) -> Unit) {
     val session = getOrCreateValidSession(context) ?: return bail { Log.i(TAG, "Bailing from code verification due to invalid session.") }
-    val sessionId = session.sessionId
+    var sessionId = session.sessionId
 
     if (!session.verified) {
       if (store.value.enteredCode == null) {
@@ -278,6 +273,9 @@ class ChangeNumberViewModel : ViewModel() {
       if (verificationResponse !is VerificationCodeRequestResult.Success && verificationResponse !is VerificationCodeRequestResult.AlreadyVerified) {
         handleVerificationError(verificationResponse, verificationErrorHandler)
         return bail { Log.i(TAG, "Bailing from code verification due to non-successful response.") }
+      }
+      if (verificationResponse is VerificationCodeRequestResult.Success) {
+        sessionId = verificationResponse.sessionId
       }
     }
 
@@ -630,7 +628,7 @@ class ChangeNumberViewModel : ViewModel() {
     val code = currentState.enteredCode ?: throw IllegalStateException("Can't construct registration data without entered code!")
     val e164: String = number.e164Number ?: throw IllegalStateException("Can't construct registration data without E164!")
     val recoveryPassword = if (currentState.sessionId == null) SignalStore.svr.recoveryPassword else null
-    val fcmToken = RegistrationRepository.getFcmToken(context)
+    val fcmToken = if (LocalServerConfig.load(context).localAuthOnly) null else RegistrationRepository.getFcmToken(context)
     return RegistrationData(code, e164, password, RegistrationRepository.getRegistrationId(), RegistrationRepository.getProfileKey(e164), fcmToken, RegistrationRepository.getPniRegistrationId(), recoveryPassword)
   }
 
