@@ -409,7 +409,7 @@ class VerificationCodeViewModel(
 
     val result = repository.requestVerificationCode(
       sessionId = state.sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
+      smsAutoRetrieveCodeSupported = false,
       transport = transport
     )
 
