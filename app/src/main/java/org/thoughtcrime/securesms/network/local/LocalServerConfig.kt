@@ -8,6 +8,9 @@ import java.net.URI
 /**
  * Runtime LAN endpoint configuration. The app deliberately defaults to LAN-only endpoints;
  * an absent or invalid file must never silently fall back to Signal's public infrastructure.
+ *
+ * ntfy reader credentials are stored only in the app's private files directory. Exported
+ * configuration files intentionally omit those credentials.
  */
 data class LocalServerConfig(
   val localAuthEnabled: Boolean = true,
@@ -22,9 +25,11 @@ data class LocalServerConfig(
   val svr2Url: String = "https://svr2.lan",
   val sfuUrl: String = "https://sfu.lan",
   val turnUrl: String = "turn:turn.lan:3478",
+  val ntfyBaseUrl: String = "https://push.lan",
+  val ntfyReaderToken: String = "",
   val caCertificatePem: String = ""
 ) {
-  fun toJson(): String = JSONObject().apply {
+  fun toJson(includeSecrets: Boolean = true): String = JSONObject().apply {
     put("schemaVersion", 1)
     put("environment", "LAN")
     put("authentication", JSONObject().apply {
@@ -45,11 +50,19 @@ data class LocalServerConfig(
       put("cdn3", cdn3Url)
       put("cdsi", cdsiUrl)
       put("svr2", svr2Url)
+      put("ntfy", JSONObject().apply {
+        put("baseUrl", ntfyBaseUrl)
+      })
       put("calling", JSONObject().apply {
         put("sfu", sfuUrl)
         put("turn", turnUrl)
       })
     })
+    if (includeSecrets) {
+      put("push", JSONObject().apply {
+        put("readerToken", ntfyReaderToken)
+      })
+    }
     put("security", JSONObject().apply {
       put("allow_cleartext", false)
       put("certificate_validation", true)
@@ -65,6 +78,8 @@ data class LocalServerConfig(
       val server = root.optJSONObject("server") ?: JSONObject()
       val modules = root.optJSONObject("modules") ?: JSONObject()
       val calling = modules.optJSONObject("calling") ?: JSONObject()
+      val ntfy = modules.optJSONObject("ntfy") ?: JSONObject()
+      val push = root.optJSONObject("push") ?: JSONObject()
       val security = root.optJSONObject("security") ?: JSONObject()
       val config = LocalServerConfig(
         localAuthEnabled = auth.optBoolean("enabled", true),
@@ -79,6 +94,8 @@ data class LocalServerConfig(
         svr2Url = modules.optString("svr2", "https://svr2.lan"),
         sfuUrl = calling.optString("sfu", "https://sfu.lan"),
         turnUrl = calling.optString("turn", "turn:turn.lan:3478"),
+        ntfyBaseUrl = ntfy.optString("baseUrl", "https://push.lan"),
+        ntfyReaderToken = push.optString("readerToken", ""),
         caCertificatePem = security.optString("ca_certificate_pem", "")
       )
       config.validate()
@@ -105,7 +122,7 @@ data class LocalServerConfig(
 
   fun validate() {
     require(localAuthEnabled) { "این نسخه فقط از احراز هویت محلی پشتیبانی می‌کند." }
-    listOf(localAuthUrl, signalApiUrl, storageUrl, cdn0Url, cdn2Url, cdn3Url, cdsiUrl, svr2Url, sfuUrl).forEach {
+    listOf(localAuthUrl, signalApiUrl, storageUrl, cdn0Url, cdn2Url, cdn3Url, cdsiUrl, svr2Url, sfuUrl, ntfyBaseUrl).forEach {
       validateHttpsUrl(it)
     }
     require(websocketUrl.startsWith("wss://", ignoreCase = true)) { "آدرس WebSocket باید از WSS استفاده کند." }
@@ -113,6 +130,9 @@ data class LocalServerConfig(
     require(caCertificatePem.contains("-----BEGIN CERTIFICATE-----") &&
       caCertificatePem.contains("-----END CERTIFICATE-----")) {
       "گواهی CA محلی (PEM) باید وارد شود؛ اعتبارسنجی TLS غیرفعال نمی‌شود."
+    }
+    require(ntfyReaderToken.isBlank() || ntfyReaderToken.startsWith("tk_") || ntfyReaderToken.startsWith("tk-")) {
+      "توکن خواندن ntfy نامعتبر است."
     }
   }
 
