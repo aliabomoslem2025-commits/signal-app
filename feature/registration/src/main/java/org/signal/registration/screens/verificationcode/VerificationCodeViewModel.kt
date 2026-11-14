@@ -178,6 +178,7 @@ class VerificationCodeViewModel(
     return state.copy(
       sessionMetadata = parentState.sessionMetadata,
       e164 = parentState.sessionE164,
+      isLocalAuth = parentState.sessionMetadata.id.startsWith(LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX),
       rateLimits = rateLimits
     )
   }
