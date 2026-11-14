@@ -178,7 +178,7 @@ class DemoNetworkController(
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
-    return registrationApi.createVerificationSession(e164, fcmToken, mcc, mnc)
+    return registrationApi.createVerificationSession(e164, mcc, mnc)
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
@@ -187,13 +187,11 @@ class DemoNetworkController(
 
   override suspend fun updateSession(
     sessionId: String,
-    pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
     return registrationApi.updateVerificationSession(
       sessionId = sessionId,
       captchaToken = captchaToken,
-      pushChallengeToken = pushChallengeToken
     )
   }
 
@@ -222,7 +220,6 @@ class DemoNetworkController(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
