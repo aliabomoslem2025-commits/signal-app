@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.signal.core.ui.compose.theme.SignalTheme
+import org.thoughtcrime.securesms.dependencies.AppDependencies
 
 /**
  * Editable runtime LAN endpoints, CA trust anchor and device enrollment export.
@@ -111,9 +112,10 @@ private fun LocalServerSettingsScreen(
         onClick = {
           try {
             initialConfig.importJson(json)
+            AppDependencies.resetNetwork()
             json = initialConfig.exportJson()
             error = null
-            Toast.makeText(context, "Server configuration saved", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Server configuration saved. Network settings will be reloaded.", Toast.LENGTH_LONG).show()
           } catch (e: Exception) {
             error = e.message ?: "Invalid configuration"
           }
