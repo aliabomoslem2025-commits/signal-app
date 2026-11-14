@@ -527,7 +527,7 @@ object RegistrationRepository {
     val encryptedDeviceName = DeviceNameCipher.encryptDeviceName(deviceName.toByteArray(StandardCharsets.UTF_8), aciIdentityKeyPair)
 
     val deviceAttributes = DeviceAttributes(
-      fetchesMessages = registrationData.fcmToken == null,
+      fetchesMessages = registrationData.ntfyTopic == null,
       registrationId = getRegistrationId(),
       pniRegistrationId = getPniRegistrationId(),
       name = Base64.encodeWithPadding(encryptedDeviceName),
@@ -541,7 +541,7 @@ object RegistrationRepository {
       .getInstance()
       .createUnauthenticated(context, number, -1, registrationData.password)
       .registrationApi
-      .registerAsSecondaryDevice(provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys, registrationData.fcmToken)
+      .registerAsSecondaryDevice(provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys, registrationData.ntfyTopic)
       .map { response ->
         RegisterAsLinkedDeviceResponse(
           deviceId = response.deviceId.toInt(),
