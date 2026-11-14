@@ -53,7 +53,7 @@ private fun LocalPinUnlockScreen(
   val context = LocalContext.current
   var pin by rememberSaveable { mutableStateOf("") }
   var error by rememberSaveable { mutableStateOf<String?>(null) }
-  var lockoutRemaining by remember { mutableLongStateOf(LocalPinLockManager.lockoutRemainingMs()) }
+  var lockoutRemaining by remember { mutableLongStateOf(LocalPinLockManager.lockoutRemainingMs(context)) }
 
   BackHandler(enabled = true) { }
 
