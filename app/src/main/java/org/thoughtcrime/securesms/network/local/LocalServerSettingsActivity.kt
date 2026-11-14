@@ -27,7 +27,7 @@ class LocalServerSettingsActivity : AppCompatActivity() {
 
   private val exportConfig = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
     if (uri != null) {
-      runCatching { LocalServerConfig.fromJson(configEditor.text.toString()).toJson() }
+      runCatching { LocalServerConfig.fromJson(configEditor.text.toString()).toJson(includeSecrets = false) }
         .onSuccess { writeText(uri, it); toast("فایل تنظیمات صادر شد.") }
         .onFailure { toast(it.message ?: "فایل تنظیمات معتبر نیست.") }
     }
@@ -53,7 +53,7 @@ class LocalServerSettingsActivity : AppCompatActivity() {
       textSize = 22f
     })
     root.addView(TextView(this).apply {
-      text = "آدرس سرویس‌ها و گواهی CA را در فایل JSON مدیریت کنید. اعتبارسنجی TLS همیشه فعال است؛ از HTTP یا گواهی ناشناس استفاده نکنید."
+      text = "آدرس سرویس‌ها، نشانی ntfy، توکن خواندن ntfy و گواهی CA را در فایل JSON مدیریت کنید. اعتبارسنجی TLS همیشه فعال است. هنگام خروجی گرفتن، توکن ntfy از فایل صادرشده حذف می‌شود."
       textSize = 14f
       setPadding(0, dp(8), 0, dp(12))
     })
@@ -94,7 +94,7 @@ class LocalServerSettingsActivity : AppCompatActivity() {
       exportEnrollment.launch("signal-device-enrollment.json")
     })
     root.addView(TextView(this).apply {
-      text = "فایل اطلاعات دستگاه فقط شامل Android ID و کلید عمومی است. کلید خصوصی در Android Keystore باقی می‌ماند و هرگز صادر نمی‌شود. بعد از ذخیره تنظیمات، برنامه را مجدداً اجرا کنید."
+      text = "فایل اطلاعات دستگاه فقط شامل Android ID و کلید عمومی است. کلید خصوصی در Android Keystore باقی می‌ماند و هرگز صادر نمی‌شود. توکن خواندن ntfy محرمانه است و در خروجی تنظیمات صادر نمی‌شود. بعد از ذخیره تنظیمات، برنامه را مجدداً اجرا کنید."
       textSize = 12f
       setPadding(0, dp(12), 0, dp(18))
     })
