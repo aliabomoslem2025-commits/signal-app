@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
  * This is deliberately not persisted and is consumed by the active registration screen only.
  */
 object LocalAuthCodeBus {
+  const val CHALLENGE_SESSION_PREFIX = "LOCAL1."
+
   data class Code(val challengeSessionId: String, val value: String)
 
   private val channel = Channel<Code>(capacity = Channel.BUFFERED)
