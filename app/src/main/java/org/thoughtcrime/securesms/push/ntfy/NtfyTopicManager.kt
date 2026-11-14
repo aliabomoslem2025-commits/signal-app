@@ -16,7 +16,10 @@ object NtfyTopicManager {
   @Synchronized
   fun getOrCreate(context: Context): String {
     val existing = SignalStore.account.ntfyTopic
-    if (!existing.isNullOrBlank()) return existing
+    if (!existing.isNullOrBlank()) {
+      NtfySubscriptionService.start(context)
+      return existing
+    }
 
     val config = LocalServerConfigStore.load(context)
     require(config.ntfyReaderToken.isNotBlank()) {
