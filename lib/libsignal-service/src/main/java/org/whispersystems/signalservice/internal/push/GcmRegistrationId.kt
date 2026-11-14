@@ -6,7 +6,7 @@ package org.whispersystems.signalservice.internal.push
 
 import com.fasterxml.jackson.annotation.JsonProperty
 
-data class GcmRegistrationId(
+data class NtfyTopicRegistration(
   @JsonProperty val gcmRegistrationId: String,
   @JsonProperty val webSocketChannel: Boolean
 )
