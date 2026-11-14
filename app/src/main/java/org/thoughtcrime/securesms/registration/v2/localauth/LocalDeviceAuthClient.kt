@@ -33,7 +33,7 @@ import javax.net.ssl.X509TrustManager
 class LocalDeviceAuthClient(context: Context) {
   private val appContext = context.applicationContext
   private val config = LocalServerConfigStore.load(appContext)
-  private val httpClient = buildHttpClient(config)
+  private val httpClient: OkHttpClient by lazy { buildHttpClient(config) }
 
   data class ChallengeResult(val challengeId: String, val verificationCode: String)
 
