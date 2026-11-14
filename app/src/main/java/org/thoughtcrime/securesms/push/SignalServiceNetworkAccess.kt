@@ -22,7 +22,6 @@ import org.signal.network.config.TrustStore
 import org.signal.network.exceptions.RequestCanceledException
 import org.thoughtcrime.securesms.BuildConfig
 import org.thoughtcrime.securesms.keyvalue.SettingsValues
-import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.keyvalue.proxy
 import org.thoughtcrime.securesms.net.CustomDns
 import org.thoughtcrime.securesms.net.DeprecatedClientPreventionInterceptor
@@ -274,7 +273,7 @@ class SignalServiceNetworkAccess(context: Context) {
     signalSvr2Urls = arrayOf(SignalSvr2Url(localServerConfig.svr2, serviceTrustStore)),
     networkInterceptors = interceptors + directFetchFailureInterceptor,
     dns = Optional.of(DNS),
-    signalProxy = if (SignalStore.proxy.isProxyEnabled) Optional.ofNullable(SignalStore.proxy.proxy) else Optional.empty(),
+    signalProxy = Optional.empty(), // LAN deployments connect directly to the configured private endpoints.
     zkGroupServerPublicParams = zkGroupServerPublicParams,
     genericServerPublicParams = genericServerPublicParams,
     backupServerPublicParams = backupServerPublicParams,
@@ -297,31 +296,11 @@ class SignalServiceNetworkAccess(context: Context) {
     return getConfiguration(SignalStore.account.e164)
   }
 
-  fun getConfiguration(e164: String?): SignalServiceConfiguration {
-    if (e164 == null || SignalStore.proxy.isProxyEnabled) {
-      return uncensoredConfiguration
-    }
-
-    val countryCode: Int = PhoneNumberUtil.getInstance().parse(e164, null).countryCode
-
-    return when (SignalStore.settings.censorshipCircumventionEnabled) {
-      SettingsValues.CensorshipCircumventionEnabled.ENABLED -> {
-        censorshipConfiguration[countryCode] ?: defaultCensoredConfiguration
-      }
-
-      SettingsValues.CensorshipCircumventionEnabled.DISABLED -> {
-        uncensoredConfiguration
-      }
-
-      SettingsValues.CensorshipCircumventionEnabled.DEFAULT -> {
-        if (defaultCensoredCountryCodes.contains(countryCode)) {
-          censorshipConfiguration[countryCode] ?: defaultCensoredConfiguration
-        } else {
-          uncensoredConfiguration
-        }
-      }
-    }
-  }
+  /**
+   * Local deployments must never select Signal's public censorship-circumvention routes based on
+   * the subscriber's country. Every network module uses the administrator-configured LAN endpoints.
+   */
+  fun getConfiguration(e164: String?): SignalServiceConfiguration = uncensoredConfiguration
 
   fun isCensored(): Boolean {
     return isCensored(SignalStore.account.e164)
