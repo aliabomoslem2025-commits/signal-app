@@ -5,6 +5,7 @@
 
 package org.thoughtcrime.securesms.components.settings.app
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import org.signal.appsettings.routes.AppSettingsRoute
 import org.signal.core.ui.compose.CollectActions
 import org.thoughtcrime.securesms.R
 import org.thoughtcrime.securesms.avatar.AvatarImage
+import org.thoughtcrime.securesms.network.local.LocalServerSettingsActivity
 import org.thoughtcrime.securesms.banner.BannerManager
 import org.thoughtcrime.securesms.banner.banners.DeprecatedBuildBanner
 import org.thoughtcrime.securesms.banner.banners.UnauthorizedBanner
@@ -60,6 +62,7 @@ fun AppSettingsEntry(
   CollectActions(viewModel.actions) { action ->
     when (action) {
       AppSettingsAction.OpenDonateUrl -> CommunicationActions.openBrowserLink(context, donateUrl)
+      AppSettingsAction.OpenLocalServerSettings -> context.startActivity(Intent(context, LocalServerSettingsActivity::class.java))
     }
   }
 
