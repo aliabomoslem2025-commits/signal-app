@@ -31,6 +31,7 @@ import java.security.SecureRandom
 import java.security.cert.CertificateFactory
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
@@ -67,6 +68,7 @@ class NtfySubscriptionService : Service() {
 
   @Volatile private var running = false
   @Volatile private var currentResponse: Response? = null
+  private val subscriptionStarted = AtomicBoolean(false)
   private var subscriptionExecutor: ExecutorService? = null
   private var fetchExecutor: ExecutorService? = null
 
@@ -95,7 +97,9 @@ class NtfySubscriptionService : Service() {
       return START_NOT_STICKY
     }
 
-    subscriptionExecutor?.execute { subscribeLoop(config, topic) }
+    if (subscriptionStarted.compareAndSet(false, true)) {
+      subscriptionExecutor?.execute { subscribeLoop(config, topic) }
+    }
     return START_STICKY
   }
 
@@ -240,6 +244,8 @@ class NtfySubscriptionService : Service() {
 
   override fun onDestroy() {
     running = false
+    subscriptionStarted.set(false)
+    connected = false
     currentResponse?.close()
     subscriptionExecutor?.shutdownNow()
     fetchExecutor?.shutdown()
