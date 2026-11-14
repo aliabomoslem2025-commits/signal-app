@@ -63,7 +63,7 @@ private fun LocalPinUnlockScreen(
       return@LaunchedEffect
     }
     while (true) {
-      lockoutRemaining = LocalPinLockManager.lockoutRemainingMs()
+      lockoutRemaining = LocalPinLockManager.lockoutRemainingMs(context)
       delay(500)
     }
   }
@@ -110,13 +110,13 @@ private fun LocalPinUnlockScreen(
             pin = ""
             onUnlocked()
           } else {
-            error = if (LocalPinLockManager.lockoutRemainingMs() > 0) {
+            error = if (LocalPinLockManager.lockoutRemainingMs(context) > 0) {
               "PIN attempts are temporarily locked."
             } else {
               "Incorrect PIN."
             }
             pin = ""
-            lockoutRemaining = LocalPinLockManager.lockoutRemainingMs()
+            lockoutRemaining = LocalPinLockManager.lockoutRemainingMs(context)
           }
         },
         enabled = pin.length in 6..12 && lockoutRemaining == 0L,
