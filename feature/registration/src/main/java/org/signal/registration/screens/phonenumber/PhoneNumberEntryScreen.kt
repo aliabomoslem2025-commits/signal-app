@@ -429,7 +429,11 @@ private fun NextButton(
   state: PhoneNumberEntryState,
   onEvent: (PhoneNumberEntryScreenEvents) -> Unit
 ) {
-  val arrangement = if (state.isPhoneNumberlessRegistrationAvailable) {
+  val context = LocalContext.current
+  val enrollmentCallback = RegistrationDependencies.get().localDeviceEnrollmentCallback
+  val canEnrollDevice = state.enteredAccountId == null && state.isNumberPossible && !state.showSpinner &&
+    enrollmentCallback != null
+  val arrangement = if (state.isPhoneNumberlessRegistrationAvailable || canEnrollDevice) {
     Arrangement.SpaceBetween
   } else {
     Arrangement.End
@@ -459,6 +463,19 @@ private fun NextButton(
             }
           )
         )
+      }
+
+      Spacer(modifier = Modifier.width(8.dp))
+    }
+
+    if (canEnrollDevice) {
+      TextButton(
+        onClick = {
+          enrollmentCallback?.accept(context, "+${state.countryCode}${state.nationalNumber}")
+        },
+        enabled = !state.showSpinner
+      ) {
+        Text("Enroll device")
       }
 
       Spacer(modifier = Modifier.width(8.dp))
