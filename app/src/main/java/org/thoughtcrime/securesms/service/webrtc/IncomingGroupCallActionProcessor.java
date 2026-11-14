@@ -222,7 +222,7 @@ public final class IncomingGroupCallActionProcessor extends DeviceAwareActionPro
     byte      dredDuration = (byte) RemoteConfig.dredDuration();
     byte[]    groupId      = currentState.getCallInfoState().getCallRecipient().requireGroupId().getDecodedId();
     GroupCall groupCall    = webRtcInteractor.getCallManager().createGroupCall(groupId,
-                                                                               SignalStore.internal().getGroupCallingServer(),
+                                                                               webRtcInteractor.getGroupCallingServer(),
                                                                                new byte[0],
                                                                                AUDIO_LEVELS_INTERVAL,
                                                                                dredDuration,
