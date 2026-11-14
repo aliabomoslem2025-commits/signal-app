@@ -211,7 +211,7 @@ private fun OnePaneLayout(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        if (state.shouldShowHavingTrouble()) {
+        if (!state.isLocalAuth && state.shouldShowHavingTrouble()) {
           TroubleButton(onEvent)
         }
       }
@@ -269,7 +269,7 @@ private fun TwoPaneLayout(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        if (state.shouldShowHavingTrouble()) {
+        if (!state.isLocalAuth && state.shouldShowHavingTrouble()) {
           TroubleButton(onEvent)
         }
       }
