@@ -5,14 +5,11 @@
 
 package org.signal.registration.screens.verificationcode
 
-import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -22,10 +19,8 @@ import org.signal.core.ui.compose.EventDrivenViewModel
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.net.RequestResult
 import org.signal.network.api.RegistrationApiV2.RegisterAccountError
-import org.signal.network.api.RegistrationApiV2.RequestVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.network.api.RegistrationApiV2.SubmitVerificationCodeError
-import org.signal.network.api.RegistrationApiV2.VerificationCodeTransport
 import org.signal.registration.PendingRestoreOption
 import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.LocalAuthCodeBus
@@ -47,7 +42,6 @@ class VerificationCodeViewModel(
   private val repository: RegistrationRepository,
   private val parentState: StateFlow<RegistrationFlowState>,
   private val parentEventEmitter: (RegistrationFlowEvent) -> Unit,
-  smsCodeEvents: Flow<String> = emptyFlow(),
   private val clock: () -> Long = { System.currentTimeMillis() }
 ) : EventDrivenViewModel<VerificationCodeScreenEvents>(TAG, shouldLogEvents = false) {
 
@@ -60,12 +54,6 @@ class VerificationCodeViewModel(
      */
     private val IN_PROGRESS_DATA_TIMEOUT = 15.minutes
 
-    /**
-     * Compatibility flow retained for callers from older registration entry points.
-     * LAN deployments never read verification codes from SMS.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    fun smsCodeFlow(context: Context): Flow<String> = emptyFlow()
   }
 
   private val _state = MutableStateFlow(VerificationCodeState())
@@ -133,8 +121,8 @@ class VerificationCodeViewModel(
       is VerificationCodeScreenEvents.CodeEntryStateChanged -> state.copy(codeEntry = event.codeEntryState)
       is VerificationCodeScreenEvents.CodeAutoFilled -> applyCodeAutoFilled(state, event.code)
       is VerificationCodeScreenEvents.WrongNumber -> state.also { parentEventEmitter.navigateTo(RegistrationRoute.PhoneNumberEntry) }
-      is VerificationCodeScreenEvents.ResendSms -> applyResendCode(state, VerificationCodeTransport.SMS)
-      is VerificationCodeScreenEvents.CallMe -> applyResendCode(state, VerificationCodeTransport.VOICE)
+      is VerificationCodeScreenEvents.ResendSms -> state
+      is VerificationCodeScreenEvents.CallMe -> state
       is VerificationCodeScreenEvents.HavingTrouble -> state.copy(showContactSupportSheet = true)
       is VerificationCodeScreenEvents.DismissContactSupport -> state.copy(showContactSupportSheet = false)
       is VerificationCodeScreenEvents.ContactSupportDialog -> state.copy(showContactSupportDialog = true)
@@ -398,96 +386,6 @@ class VerificationCodeViewModel(
     }
   }
 
-  private suspend fun applyResendCode(
-    state: VerificationCodeState,
-    transport: VerificationCodeTransport
-  ): VerificationCodeState {
-    if (state.sessionMetadata == null) {
-      parentEventEmitter(RegistrationFlowEvent.ResetState)
-      return state
-    }
-
-    val result = repository.requestVerificationCode(
-      sessionId = state.sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = false,
-      transport = transport
-    )
-
-    return when (result) {
-      is RequestResult.Success -> {
-        Log.i(TAG, "[RequestCode][$transport] Successfully requested verification code.")
-        parentEventEmitter(RegistrationFlowEvent.VerificationCodeRequested.from(state.e164, transport, result.result, clock()))
-        parentEventEmitter(RegistrationFlowEvent.SessionUpdated(result.result))
-        state.copy(
-          sessionMetadata = result.result,
-          rateLimits = computeRateLimits(result.result)
-        )
-      }
-      is RequestResult.NonSuccess -> {
-        when (val error = result.error) {
-          is RequestVerificationCodeError.InvalidRequest -> {
-            Log.w(TAG, "[RequestCode][$transport] Invalid request: ${error.message}")
-            state.copy(dialogs = state.dialogs.copy(unknownError = true))
-          }
-          is RequestVerificationCodeError.RateLimited -> {
-            Log.w(TAG, "[RequestCode][$transport] Rate limited (retryAfter: ${error.retryAfter}).")
-            parentEventEmitter(RegistrationFlowEvent.SessionUpdated(error.session))
-            state.copy(
-              dialogs = state.dialogs.copy(rateLimitedRetryAfter = error.retryAfter),
-              sessionMetadata = error.session,
-              rateLimits = computeRateLimits(error.session)
-            )
-          }
-          is RequestVerificationCodeError.CouldNotFulfillWithRequestedTransport -> {
-            Log.w(TAG, "[RequestCode][$transport] Could not fulfill with requested transport.")
-            parentEventEmitter(RegistrationFlowEvent.SessionUpdated(error.session))
-            state.copy(
-              dialogs = state.dialogs.copy(couldNotRequestCodeWithSelectedTransport = true),
-              sessionMetadata = error.session,
-              rateLimits = computeRateLimits(error.session)
-            )
-          }
-          is RequestVerificationCodeError.InvalidSessionId -> {
-            Log.w(TAG, "[RequestCode][$transport] Invalid session ID: ${error.message}. Navigating back to phone number entry.")
-            parentEventEmitter.navigateBack()
-            state
-          }
-          is RequestVerificationCodeError.MissingRequestInformationOrAlreadyVerified -> {
-            Log.w(TAG, "[RequestCode][$transport] Missing request information or already verified.")
-            parentEventEmitter(RegistrationFlowEvent.SessionUpdated(error.session))
-            state.copy(
-              dialogs = state.dialogs.copy(unableToSendSms = true),
-              sessionMetadata = error.session,
-              rateLimits = computeRateLimits(error.session)
-            )
-          }
-          is RequestVerificationCodeError.SessionNotFound -> {
-            Log.w(TAG, "[RequestCode][$transport] Session not found: ${error.message}. Navigating back to phone number entry.")
-            parentEventEmitter.navigateBack()
-            state
-          }
-          is RequestVerificationCodeError.ThirdPartyServiceError -> {
-            Log.w(TAG, "[RequestCode][$transport] Third party service error. ${error.data}")
-            state.copy(dialogs = state.dialogs.copy(providerRejectedTransport = transport))
-          }
-        }
-      }
-      is RequestResult.RetryableNetworkError -> {
-        Log.w(TAG, "[RequestCode][$transport] Network error.", result.networkError)
-        state.copy(dialogs = state.dialogs.copy(networkError = true))
-      }
-      is RequestResult.ApplicationError -> {
-        Log.w(TAG, "[RequestCode][$transport] Unknown application error.", result.cause)
-        state.copy(dialogs = state.dialogs.copy(unknownError = true))
-      }
-    }
-  }
-
-  /**
-   * Builds the countdowns from a freshly-returned session. A null [SessionMetadata.nextSms]/[SessionMetadata.nextCall]
-   * means the server won't permit that request, which we surface as a null remaining time (an unavailable button)
-   * rather than a countdown.
-   */
   private fun computeRateLimits(session: SessionMetadata): SmsAndCallRateLimits {
     return SmsAndCallRateLimits(
       smsResendTimeRemaining = session.nextSms?.seconds?.coerceAtLeast(0.seconds),
