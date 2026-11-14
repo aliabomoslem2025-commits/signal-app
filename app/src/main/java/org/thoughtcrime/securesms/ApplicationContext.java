@@ -74,7 +74,6 @@ import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
 import org.thoughtcrime.securesms.dependencies.AppRemoteConfigDependencies;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencyProvider;
-import org.thoughtcrime.securesms.gcm.FcmFetchManager;
 import org.thoughtcrime.securesms.glide.SignalGlideComponents;
 import org.thoughtcrime.securesms.jobmanager.impl.SealedSenderConstraint;
 import org.thoughtcrime.securesms.jobs.AccountConsistencyWorkerJob;
@@ -86,7 +85,6 @@ import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob;
 import org.thoughtcrime.securesms.jobs.CheckServiceReachabilityJob;
 import org.thoughtcrime.securesms.jobs.DownloadLatestEmojiDataJob;
 import org.thoughtcrime.securesms.jobs.EmojiSearchIndexDownloadJob;
-import org.thoughtcrime.securesms.jobs.FcmRefreshJob;
 import org.thoughtcrime.securesms.jobs.FontDownloaderJob;
 import org.thoughtcrime.securesms.jobs.GroupRingCleanupJob;
 import org.thoughtcrime.securesms.jobs.GroupV2UpdateSelfProfileKeyJob;
@@ -105,6 +103,7 @@ import org.thoughtcrime.securesms.jobs.RetrieveRemoteAnnouncementsJob;
 import org.thoughtcrime.securesms.jobs.StorageSyncJob;
 import org.thoughtcrime.securesms.jobs.StoryOnboardingDownloadJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
+import org.thoughtcrime.securesms.push.ntfy.NtfySubscriptionService;
 import org.thoughtcrime.securesms.logging.CustomSignalProtocolLogger;
 import org.thoughtcrime.securesms.logging.PersistentLogger;
 import org.thoughtcrime.securesms.logsubmit.SubmitDebugLogActivity;
@@ -229,7 +228,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
               .addNonBlocking(this::initializeRevealableMessageManager)
               .addNonBlocking(this::initializePendingRetryReceiptManager)
               .addNonBlocking(this::initializeScheduledMessageManager)
-              .addNonBlocking(this::initializeFcmCheck)
+              .addNonBlocking(this::initializeNtfyPush)
               .addNonBlocking(this::recordProcessExits)
               .addNonBlocking(PreKeysSyncJob::enqueueIfNeeded)
               .addNonBlocking(this::initializePeriodicTasks)
@@ -297,7 +296,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
     AppDependencies.getMegaphoneRepository().onAppForegrounded();
     AppDependencies.getDeadlockDetector().start();
     InAppPaymentKeepAliveJob.enqueueAndTrackTimeIfNecessary();
-    FcmFetchManager.onForeground(this);
+    NtfySubscriptionService.start(this);
     startAnrDetector();
 
     SignalExecutors.BOUNDED.execute(() -> {
@@ -507,39 +506,15 @@ public class ApplicationContext extends Application implements AppForegroundObse
     }
   }
 
-  private void initializeFcmCheck() {
+  private void initializeNtfyPush() {
     if (!SignalStore.account().isRegistered()) {
       return;
     }
 
-    PlayServicesUtil.PlayServicesStatus playServicesStatus = PlayServicesUtil.getPlayServicesStatus(this);
-
-    if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.SUCCESS && !SignalStore.account().isFcmEnabled()) {
-      Log.w(TAG, "Play Services are newly-available. Enabling FCM and updating server.");
-      SignalStore.account().setFcmEnabled(true);
-      AppDependencies.getJobManager().startChain(new FcmRefreshJob())
-                                      .then(new RefreshAttributesJob())
-                                      .enqueue();
-      AppDependencies.resetNetwork();
-      AppDependencies.startNetwork();
-      IncomingMessageObserver.stopForegroundService(this);
-    } else if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.MISSING && SignalStore.account().isFcmEnabled()) {
-      Log.w(TAG, "Play Services are no longer available. Attempting to get an FCM token anyway.");
-      AppDependencies.getJobManager().add(new FcmRefreshJob());
-    } else if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.MISSING && (System.currentTimeMillis() - SignalStore.misc().getLastMissingPlayServicesFcmVerificationTime()) > TimeUnit.DAYS.toMillis(3)) {
-      Log.i(TAG, "Play Services are unavailable, but it's been long enough that we should check and see if we can get an FCM token anyway.");
-      AppDependencies.getJobManager().add(new FcmRefreshJob());
-    } else if (SignalStore.account().isFcmEnabled()) {
-      long lastSetTime = SignalStore.account().getFcmTokenLastSetTime();
-      long nextSetTime = lastSetTime + TimeUnit.HOURS.toMillis(6);
-      long now         = System.currentTimeMillis();
-
-      if (SignalStore.account().getFcmToken() == null || nextSetTime <= now || lastSetTime > now) {
-        Log.i(TAG, "Time for routine FCM token refresh.");
-        AppDependencies.getJobManager().add(new FcmRefreshJob());
-      }
-    } else {
-      Log.d(TAG, "Play Services status: " + playServicesStatus + ", fcmEnabled: false. Skipping FCM check.");
+    try {
+      NtfySubscriptionService.start(this);
+    } catch (RuntimeException e) {
+      Log.w(TAG, "Unable to start the private ntfy notification subscription.", e);
     }
   }
 
