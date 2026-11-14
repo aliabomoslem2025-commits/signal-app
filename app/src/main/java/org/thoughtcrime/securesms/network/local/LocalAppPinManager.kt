@@ -24,10 +24,13 @@ object LocalAppPinManager {
 
   @Volatile private var unlocked = false
   @Volatile private var promptStarted = false
+  @Volatile private var isProcessPinEnabled = false
 
   fun isEnabled(context: Context): Boolean {
     val prefs = prefs(context)
-    return !prefs.getString(SALT, null).isNullOrBlank() && !prefs.getString(HASH, null).isNullOrBlank()
+    val enabled = !prefs.getString(SALT, null).isNullOrBlank() && !prefs.getString(HASH, null).isNullOrBlank()
+    isProcessPinEnabled = enabled
+    return enabled
   }
 
   fun setPin(context: Context, pin: String) {
@@ -40,6 +43,7 @@ object LocalAppPinManager {
       .putInt(ATTEMPTS, 0)
       .putLong(LOCK_UNTIL, 0L)
       .apply()
+    isProcessPinEnabled = true
     unlocked = true
     promptStarted = false
   }
@@ -47,6 +51,7 @@ object LocalAppPinManager {
   fun disable(context: Context, currentPin: String) {
     require(verify(context, currentPin)) { "PIN فعلی صحیح نیست." }
     prefs(context).edit().clear().apply()
+    isProcessPinEnabled = false
     unlocked = true
     promptStarted = false
   }
@@ -94,8 +99,6 @@ object LocalAppPinManager {
       promptStarted = false
     }
   }
-
-  @Volatile private var isProcessPinEnabled: Boolean = false
 
   private fun prefs(context: Context) =
     context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
