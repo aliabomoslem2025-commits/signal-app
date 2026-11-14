@@ -52,21 +52,21 @@ class AccountApi(private val authWebSocket: SignalWebSocket.AuthenticatedWebSock
   }
 
   /**
-   * Sets the FCM push token the server should use to notify this device of new messages.
+   * Sets this Android device's ntfy topic for private wake-up notification delivery.
    */
-  fun setFcmToken(fcmToken: String): RequestResult<Unit, Nothing> {
+  fun setNtfyTopic(ntfyTopic: String): RequestResult<Unit, Nothing> {
     return runBlocking {
       authWebSocket.runCatchingWithChatConnection { connection ->
-        AuthDevicesService(connection).setPushToken(fcmToken)
+        AuthDevicesService(connection).setPushToken(ntfyTopic)
       }
     }
   }
 
   /**
-   * Removes any push tokens associated with this device. Afterwards, the server will assume this device
+   * Removes any ntfy topic associated with this device. Afterwards, the server will assume this device
    * polls for new messages over an open websocket.
    */
-  suspend fun clearFcmToken(): RequestResult<Unit, Nothing> {
+  suspend fun clearNtfyTopic(): RequestResult<Unit, Nothing> {
     return authWebSocket.runCatchingWithChatConnection { connection ->
       AuthDevicesService(connection).clearPushToken()
     }
