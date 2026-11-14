@@ -92,6 +92,7 @@ import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
 import org.thoughtcrime.securesms.push.ntfy.NtfyTopicManager
 import org.thoughtcrime.securesms.push.ntfy.NtfySubscriptionService
+import org.thoughtcrime.securesms.registration.ntfy.PushChallengeRequest
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileContentUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileKeyUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceSyncRequestJob
@@ -152,7 +153,7 @@ class AppRegistrationNetworkController(
 
   override suspend fun createSession(
     e164: String,
-    fcmToken: String?,
+    ntfyTopic: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
@@ -302,7 +303,7 @@ class AppRegistrationNetworkController(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
+    ntfyTopic: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
@@ -317,7 +318,7 @@ class AppRegistrationNetworkController(
       attributes = attributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
+      ntfyTopic = ntfyTopic,
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
@@ -364,7 +365,7 @@ class AppRegistrationNetworkController(
     }
   }
 
-  override suspend fun getFcmToken(): String? {
+  override suspend fun getNtfyTopic(): String? {
     return try {
       val topic = NtfyTopicManager.getOrCreate(context)
       if (!NtfySubscriptionService.awaitConnected(15_000L)) {
@@ -878,7 +879,7 @@ class AppRegistrationNetworkController(
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
+    ntfyTopic: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
     return registrationApi.registerAsSecondaryDevice(
       aci = aci,
@@ -887,7 +888,7 @@ class AppRegistrationNetworkController(
       attributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
+      ntfyTopic = ntfyTopic
     )
   }
 
