@@ -22,5 +22,6 @@
   "security": {
     "allowCleartext": false,
     "validateCertificates": true
-  }
+  },
+  "trustedCaPem": ""
 }
