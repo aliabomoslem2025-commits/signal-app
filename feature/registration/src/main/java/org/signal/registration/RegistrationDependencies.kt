@@ -7,6 +7,7 @@ package org.signal.registration
 
 import android.content.Context
 import org.signal.core.util.logging.Log
+import java.util.function.BiConsumer
 import org.signal.registration.util.SensitiveLog
 
 /**
@@ -26,7 +27,7 @@ import org.signal.registration.util.SensitiveLog
  * @param proxyConfigCallback Callback to launch the proxy configuration settings. The actual app provides the real implementation.
  * @param contactSupportController Lets the user contact support, optionally attaching a debug log. The actual app provides the real implementation.
  */
-class RegistrationDependencies(
+class RegistrationDependencies @JvmOverloads constructor(
   val networkController: NetworkController,
   val storageController: StorageController,
   val isLinkAndSyncAvailable: Boolean,
@@ -36,7 +37,8 @@ class RegistrationDependencies(
   val sensitiveLogger: Log.Logger?,
   val debugLogCallback: ((Context) -> Unit)?,
   val proxyConfigCallback: ((Context) -> Unit)?,
-  val contactSupportController: ContactSupportController?
+  val contactSupportController: ContactSupportController?,
+  val localDeviceEnrollmentCallback: BiConsumer<Context, String>? = null
 ) {
   companion object {
     lateinit var dependencies: RegistrationDependencies
