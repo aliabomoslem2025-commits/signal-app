@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
+import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -213,14 +214,13 @@ private fun LocalServerSettingsScreen(
         onClick = {
           try {
             val keyStore = LocalDeviceAuthKeyStore(context)
-            val bundle = buildString {
-              append("Android ID: ")
-              append(keyStore.androidId())
-              append("\n\n")
-              append(keyStore.publicKeyPem())
-            }
-            copyToClipboard(context, "Signal LAN device enrollment", bundle)
-            Toast.makeText(context, "Android ID and public key copied", Toast.LENGTH_LONG).show()
+            val bundle = JSONObject()
+              .put("formatVersion", 1)
+              .put("androidId", keyStore.androidId())
+              .put("publicKeyPem", keyStore.publicKeyPem())
+              .toString(2)
+            copyToClipboard(context, "Signal LAN device enrollment JSON", bundle)
+            Toast.makeText(context, "Device enrollment JSON copied", Toast.LENGTH_LONG).show()
           } catch (e: Exception) {
             error = e.message ?: "Could not export device public key"
           }
