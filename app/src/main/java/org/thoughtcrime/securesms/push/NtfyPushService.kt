@@ -18,12 +18,15 @@ import org.json.JSONObject
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.net.RequestResult
 import org.thoughtcrime.securesms.R
+import org.thoughtcrime.securesms.dependencies.AppDependencies
+import org.thoughtcrime.securesms.jobs.SubmitRateLimitPushChallengeJob
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.messages.WebSocketDrainer
 import org.thoughtcrime.securesms.net.SignalNetwork
 import org.thoughtcrime.securesms.notifications.NotificationChannels
 import org.thoughtcrime.securesms.notifications.NotificationIds
 import org.thoughtcrime.securesms.registration.local.LocalServerConfig
+import org.thoughtcrime.securesms.registration.ntfy.PushChallengeRequest
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
@@ -90,6 +93,11 @@ class NtfyPushService : Service() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    val config = runCatching { LocalServerConfig.load(this) }.getOrNull()
+    if (!SignalStore.account.isRegistered || config == null || !config.localAuthOnly || !config.isNtfyPushConfigured) {
+      stopSelf(startId)
+      return START_NOT_STICKY
+    }
     if (!running) {
       running = true
       worker = Thread(::runSubscriptionLoop, "SignalNtfySubscription").apply {
@@ -167,7 +175,7 @@ class NtfyPushService : Service() {
         else -> throw IOException("Signal Server rejected ntfy topic registration")
       }
     }
-    require(topic.matches(Regex("[A-Za-z0-9_-]{32,128}"))) { "Signal Server returned an invalid ntfy topic" }
+    require(topic.matches(Regex("signal-[A-Za-z0-9_-]{32,64}"))) { "Signal Server returned an invalid ntfy topic" }
 
     val preferences = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val previousTopic = preferences.getString(LAST_TOPIC, null)
@@ -198,7 +206,7 @@ class NtfyPushService : Service() {
     }
 
     BufferedReader(InputStreamReader(connection.inputStream, StandardCharsets.UTF_8)).use { reader ->
-      while (running) {
+      while (running && SignalStore.account.isRegistered) {
         val line = reader.readLine() ?: throw IOException("ntfy stream ended")
         if (line.isBlank()) continue
         val event = try {
@@ -211,20 +219,58 @@ class NtfyPushService : Service() {
 
         val messageId = event.optString("id")
         val payload = event.optString("message")
-        if (payload == "wake") {
-          // Do not acknowledge the ntfy event until Signal's authenticated receive path drains.
-          val drained = WebSocketDrainer.blockUntilDrainedAndProcessed(
-            WEBSOCKET_DRAIN_TIMEOUT_MS,
-            KEEP_ALIVE_TOKEN
-          )
-          if (!drained) throw IOException("Signal WebSocket did not drain after ntfy wake hint")
-        }
+        processNtfyPayload(payload)
 
-        if (messageId.isNotBlank()) {
-          preferences.edit().putString(LAST_MESSAGE_ID, messageId).apply()
+        // Only advance the cursor after Signal's receive path or the control event was handled.
+        if (messageId.isNotBlank() &&
+            !preferences.edit().putString(LAST_MESSAGE_ID, messageId).commit()) {
+          throw IOException("Could not persist the processed ntfy message cursor")
         }
       }
     }
+  }
+
+  private fun processNtfyPayload(payload: String) {
+    if (payload == "wake" || payload.isBlank()) {
+      drainSignalMessages()
+      return
+    }
+
+    val control = runCatching { JSONObject(payload) }.getOrNull()
+    if (control == null) {
+      // Unknown formats are treated as wake hints, never as chat content.
+      drainSignalMessages()
+      return
+    }
+
+    when (control.optString("type")) {
+      "CHALLENGE" -> {
+        val challenge = control.optString("data")
+        if (challenge.isBlank()) throw IOException("ntfy CHALLENGE event did not contain a token")
+        PushChallengeRequest.postChallengeResponse(challenge)
+      }
+      "RATE_LIMIT_CHALLENGE" -> {
+        val challenge = control.optString("data")
+        if (challenge.isBlank()) throw IOException("ntfy RATE_LIMIT_CHALLENGE event did not contain a token")
+        AppDependencies.getJobManager().add(SubmitRateLimitPushChallengeJob(challenge))
+      }
+      "VERIFICATION_CODE_REQUESTED" -> {
+        if (SignalStore.account.isPrimaryDevice) {
+          val data = control.optJSONObject("data")
+          val requestedAt = data?.optLong("timestamp", System.currentTimeMillis()) ?: System.currentTimeMillis()
+          SignalStore.account.verificationCodeRequestedAtMs = requestedAt
+        }
+      }
+      else -> drainSignalMessages()
+    }
+  }
+
+  private fun drainSignalMessages() {
+    val drained = WebSocketDrainer.blockUntilDrainedAndProcessed(
+      WEBSOCKET_DRAIN_TIMEOUT_MS,
+      KEEP_ALIVE_TOKEN
+    )
+    if (!drained) throw IOException("Signal WebSocket did not drain after ntfy wake hint")
   }
 
   private fun configureLanTrust(connection: HttpsURLConnection) {
