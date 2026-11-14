@@ -97,15 +97,15 @@ public class SignalServiceAccountManager {
   }
 
   /**
-   * Request a push challenge. A number will be pushed to the GCM (FCM) id. This can then be used
+   * Request a push challenge. The challenge is delivered to this device's ntfy topic. This can then be used
    * during SMS/call requests to bypass the CAPTCHA.
    *
-   * @param gcmRegistrationId The GCM (FCM) id to use.
+   * @param ntfyTopic The private ntfy topic registered for this device.
    * @param sessionId         The session to request a push for.
    * @throws IOException
    */
-  public void requestRegistrationPushChallenge(String sessionId, String gcmRegistrationId) throws IOException {
-    pushServiceSocket.requestPushChallenge(sessionId, gcmRegistrationId);
+  public void requestRegistrationPushChallenge(String sessionId, String ntfyTopic) throws IOException {
+    pushServiceSocket.requestPushChallenge(sessionId, ntfyTopic);
   }
 
   public void checkNetworkConnection() throws IOException {
