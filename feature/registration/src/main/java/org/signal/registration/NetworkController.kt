@@ -65,7 +65,7 @@ interface NetworkController {
    *
    * `POST /v1/verification/session`
    */
-  suspend fun createSession(e164: String, fcmToken: String?, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError>
+  suspend fun createSession(e164: String, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError>
 
   /**
    * Retrieve current status of a registration session.
@@ -79,7 +79,7 @@ interface NetworkController {
    *
    * `PATCH /v1/verification/session/{session-id}`
    */
-  suspend fun updateSession(sessionId: String, pushChallengeToken: String?, captchaToken: String?): RequestResult<SessionMetadata, UpdateSessionError>
+  suspend fun updateSession(sessionId: String, captchaToken: String?): RequestResult<SessionMetadata, UpdateSessionError>
 
   /**
    * Request an SMS verification code. On success, the server will send an SMS verification code to this Signal user.
@@ -131,7 +131,6 @@ interface NetworkController {
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
@@ -181,20 +180,6 @@ interface NetworkController {
    * because it requires the zkgroup server public params for the environment this controller talks to.
    */
   fun createReceiptCredentialPresentation(receiptCredential: ReceiptCredential): ReceiptCredentialResult<ReceiptCredentialPresentation>
-
-  /**
-   * Retrieves an FCM token, if possible. Null means that this device does not support FCM.
-   */
-  suspend fun getFcmToken(): String?
-
-  /**
-   * Waits for a push challenge token to arrive via FCM.
-   * This is a suspending function that will complete when the token arrives.
-   * The caller should wrap this in withTimeoutOrNull to handle timeout scenarios.
-   *
-   * @return The push challenge token, or null if cancelled/unavailable.
-   */
-  suspend fun awaitPushChallengeToken(): String?
 
   /**
    * Returns the URL to load in the WebView for captcha verification.
@@ -375,8 +360,7 @@ interface NetworkController {
     provisioningCode: String,
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
-    pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
+    pniPreKeys: PreKeyCollection?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError>
 
   /**
