@@ -15,7 +15,7 @@ object NotificationIds {
   const val KEY_CACHING_SERVICE: Int = 20
   const val INCOMING_MESSAGE_OBSERVER: Int = 30
   const val GENERIC_FOREGROUND_SERVICE: Int = 40
-  const val FCM_FETCH: Int = 50
+  const val NTFY_PUSH_SERVICE: Int = 50
   const val MAY_HAVE_MESSAGES_NOTIFICATION_ID: Int = 60
   const val WEBRTC_CALL: Int = 70
   const val WEBRTC_CALL_RINGING: Int = 71
