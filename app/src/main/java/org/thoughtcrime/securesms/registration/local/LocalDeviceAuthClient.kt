@@ -23,7 +23,8 @@ import kotlinx.coroutines.withContext
  */
 class LocalDeviceAuthClient(context: Context) {
   private val appContext = context.applicationContext
-  private val config = LocalServerConfig.load(appContext)
+  private val config: LocalServerConfig
+    get() = LocalServerConfig.load(appContext)
   private val keyStore = LocalDeviceAuthKeyStore(appContext)
 
   val isEnabled: Boolean
