@@ -113,6 +113,7 @@ private fun LocalServerSettingsScreen(
           try {
             initialConfig.importJson(json)
             AppDependencies.resetNetwork()
+            AppDependencies.startNetwork()
             json = initialConfig.exportJson()
             error = null
             Toast.makeText(context, "Server configuration saved. Network settings will be reloaded.", Toast.LENGTH_LONG).show()
