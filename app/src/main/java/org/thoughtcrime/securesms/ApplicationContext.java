@@ -111,6 +111,8 @@ import org.thoughtcrime.securesms.logsubmit.SubmitDebugLogActivity;
 import org.thoughtcrime.securesms.messageprocessingalarm.RoutineMessageFetchReceiver;
 import org.thoughtcrime.securesms.messages.IncomingMessageObserver;
 import org.thoughtcrime.securesms.migrations.ApplicationMigrations;
+import org.thoughtcrime.securesms.network.local.LocalAppPinActivity;
+import org.thoughtcrime.securesms.network.local.LocalAppPinManager;
 import org.thoughtcrime.securesms.mms.SignalGlideModule;
 import org.thoughtcrime.securesms.preferences.EditProxyActivity;
 import org.thoughtcrime.securesms.ratelimit.RateLimitUtil;
@@ -283,6 +285,12 @@ public class ApplicationContext extends Application implements AppForegroundObse
     long startTime = System.currentTimeMillis();
     Log.i(TAG, "App is now visible. Battery: " + DeviceProperties.getBatteryLevel(this) + "% (charging: " + DeviceProperties.isCharging(this) + ")");
 
+    if (LocalAppPinManager.shouldPrompt(this)) {
+      Intent pinIntent = new Intent(this, LocalAppPinActivity.class);
+      pinIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+      startActivity(pinIntent);
+    }
+
     BatterySnapshotTracker.emit(this, "foreground");
 
     AppDependencies.getFrameRateTracker().start();
@@ -329,6 +337,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
 
   @Override
   public void onBackground() {
+    LocalAppPinManager.onBackground();
     Log.i(TAG, "App is no longer visible.");
     BatterySnapshotTracker.emit(this, "background");
     KeyCachingService.onAppBackgrounded(this);
