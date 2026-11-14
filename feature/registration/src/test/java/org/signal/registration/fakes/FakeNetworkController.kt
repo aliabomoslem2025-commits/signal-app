@@ -108,7 +108,7 @@ class FakeNetworkController(
     const val LOGIN_PLAY_PRODUCT_ID = "signup"
   }
 
-  data class UpdateSessionRequest(val sessionId: String?, val pushChallengeToken: String?, val captchaToken: String?)
+  data class UpdateSessionRequest(val sessionId: String?, val captchaToken: String?)
   data class RegisterAccountRequest(val e164: String?, val sessionId: String?, val recoveryPassword: String?, val registrationLock: String?, val aci: ACI? = null, val pniPreKeys: PreKeyCollection? = null, val pniRegistrationId: Int? = null, val receiptCredentialPresentation: ReceiptCredentialPresentation? = null, val totp: Int? = null, val webAuthnResponse: String? = null)
   data class SetPinRequest(val pin: String, val masterKey: MasterKey)
   data class RestoreMasterKeyRequest(val svrCredentials: SvrCredentials, val pin: String)
@@ -155,12 +155,6 @@ class FakeNetworkController(
    * correct code is submitted, and reflected in the sessions built by [session].
    */
   var sessionVerified = false
-
-  /** Returned by [getFcmToken]. Null means the device does not support FCM. */
-  var fcmToken: String? = null
-
-  /** Returned by [awaitPushChallengeToken]. Null means no push challenge ever arrives. */
-  var pushChallengeToken: String? = null
 
   /** Stands in for the service's zkgroup receipt params. */
   val receiptServerSecretParams: ServerSecretParams by lazy { ServerSecretParams.generate() }
@@ -339,7 +333,7 @@ class FakeNetworkController(
 
   // -- NetworkController implementation: record the request, then delegate to the handler.
 
-  override suspend fun createSession(e164: String, fcmToken: String?, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError> {
+  override suspend fun createSession(e164: String, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError> {
     lastCreateSessionE164 = e164
     return onCreateSession(e164)
   }
@@ -348,8 +342,8 @@ class FakeNetworkController(
     return onGetSession(sessionId)
   }
 
-  override suspend fun updateSession(sessionId: String, pushChallengeToken: String?, captchaToken: String?): RequestResult<SessionMetadata, UpdateSessionError> {
-    val request = UpdateSessionRequest(sessionId, pushChallengeToken, captchaToken)
+  override suspend fun updateSession(sessionId: String, captchaToken: String?): RequestResult<SessionMetadata, UpdateSessionError> {
+    val request = UpdateSessionRequest(sessionId, captchaToken)
     lastUpdateSessionRequest = request
     return onUpdateSession(request)
   }
@@ -378,7 +372,6 @@ class FakeNetworkController(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
@@ -440,10 +433,6 @@ class FakeNetworkController(
       .plusSeconds(LOGIN_RECEIPT_LIFESPAN.inWholeSeconds)
       .epochSecond
   }
-
-  override suspend fun getFcmToken(): String? = fcmToken
-
-  override suspend fun awaitPushChallengeToken(): String? = pushChallengeToken
 
   override fun getCaptchaUrl(): String = "https://example.com/captcha"
 
@@ -509,7 +498,6 @@ class FakeNetworkController(
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
     lastRegisterAsLinkedDeviceAttributes = deviceAttributes
     return onRegisterAsLinkedDevice(deviceAttributes)
