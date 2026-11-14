@@ -171,7 +171,8 @@ class RegistrationRepository(
   fun isLocalAuthEnabled(): Boolean = networkController.isLocalAuthEnabled()
 
   suspend fun createSession(e164: String): RequestResult<SessionMetadata, CreateSessionError> = withContext(Dispatchers.IO) {
-    val fcmToken = networkController.getFcmToken()
+    // LAN device authentication does not require Google/FCM to prove device possession.
+    val fcmToken = if (networkController.isLocalAuthEnabled()) null else networkController.getFcmToken()
     networkController.createSession(
       e164 = e164,
       fcmToken = fcmToken,
