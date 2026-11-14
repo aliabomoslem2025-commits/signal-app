@@ -144,8 +144,12 @@ class LocalServerConfig private constructor(
     if (turnUsername.isNotBlank()) {
       normalizedTurnEndpoint(services.optString("turn"))
     }
+    val existingNtfyReaderToken = defaults.optString("ntfyReaderToken")
     defaults.keys().asSequence().toList().forEach(defaults::remove)
     parsed.keys().forEach { key -> defaults.put(key, parsed.get(key)) }
+    if (!parsed.has("ntfyReaderToken") && existingNtfyReaderToken.isNotBlank()) {
+      defaults.put("ntfyReaderToken", existingNtfyReaderToken)
+    }
     persist()
   }
 
