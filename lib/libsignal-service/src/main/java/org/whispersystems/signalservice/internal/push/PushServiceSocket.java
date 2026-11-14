@@ -321,9 +321,9 @@ public class PushServiceSocket {
 
     NtfyTopicRegistration ntfyTopicRegistration;
     if (attributes.getFetchesMessages()) {
-      gcmRegistrationId = null;
+      ntfyTopicRegistration = null;
     } else {
-      gcmRegistrationId = new NtfyTopicRegistration(fcmToken, true);
+      ntfyTopicRegistration = new NtfyTopicRegistration(ntfyTopic, true);
     }
 
     RegistrationSessionRequestBody body;
@@ -350,7 +350,7 @@ public class PushServiceSocket {
                                                 pniSignedPreKey,
                                                 aciLastResortKyberPreKey,
                                                 pniLastResortKyberPreKey,
-                                                gcmRegistrationId,
+                                                ntfyTopicRegistration,
                                                 skipDeviceTransfer,
                                                 true);
     } catch (InvalidKeyException e) {
@@ -366,8 +366,8 @@ public class PushServiceSocket {
     makeServiceRequest(String.format(Locale.US, SET_RESTORE_METHOD_PATH, urlEncode(token)), "PUT", body, NO_HEADERS, UNOPINIONATED_HANDLER, SealedSenderAccess.NONE);
   }
 
-  public void requestPushChallenge(String sessionId, String gcmRegistrationId) throws IOException {
-    patchVerificationSession(sessionId, gcmRegistrationId, null, null, null, null);
+  public void requestPushChallenge(String sessionId, String ntfyTopic) throws IOException {
+    patchVerificationSession(sessionId, ntfyTopic, null, null, null, null);
   }
 
   public RegisterAsSecondaryDeviceResponse registerAsSecondaryDevice(RegisterAsSecondaryDeviceRequest request) throws IOException {
