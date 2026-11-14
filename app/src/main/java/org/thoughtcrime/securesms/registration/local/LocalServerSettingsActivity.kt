@@ -162,7 +162,8 @@ private fun LocalServerSettingsScreen(
         onClick = {
           try {
             require(pin == confirmPin) { "PIN confirmation does not match" }
-            if (pinEnabled) {
+            val changingExistingPin = pinEnabled
+            if (changingExistingPin) {
               require(currentPin.length in 6..12) { "Enter the current PIN first" }
               require(LocalPinLockManager.changePin(context, currentPin, pin)) { "Current PIN is incorrect or temporarily locked" }
             } else {
@@ -173,7 +174,7 @@ private fun LocalServerSettingsScreen(
             confirmPin = ""
             pinEnabled = true
             error = null
-            Toast.makeText(context, if (pinEnabled) "Local app PIN saved" else "Local app PIN enabled", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, if (changingExistingPin) "Local app PIN changed" else "Local app PIN enabled", Toast.LENGTH_LONG).show()
           } catch (e: Exception) {
             error = e.message ?: "Could not save local PIN"
           }
