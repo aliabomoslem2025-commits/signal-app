@@ -14,7 +14,7 @@ import org.whispersystems.signalservice.api.provisioning.RestoreMethod
 import org.whispersystems.signalservice.api.push.SignedPreKeyEntity
 import org.whispersystems.signalservice.internal.push.BackupV2AuthCheckResponse
 import org.whispersystems.signalservice.internal.push.BackupV3AuthCheckResponse
-import org.whispersystems.signalservice.internal.push.GcmRegistrationId
+import org.whispersystems.signalservice.internal.push.NtfyTopicRegistration
 import org.whispersystems.signalservice.internal.push.KyberPreKeyEntity
 import org.whispersystems.signalservice.internal.push.PushServiceSocket
 import org.whispersystems.signalservice.internal.push.RegisterAsSecondaryDeviceRequest
@@ -34,7 +34,7 @@ class RegistrationApi(
    *
    * `POST /v1/verification/session`
    */
-  fun createRegistrationSession(fcmToken: String?, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> {
+  fun createRegistrationSession(ntfyTopic: String?, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> {
     return NetworkResult.fromFetch {
       pushServiceSocket.createVerificationSession(fcmToken, mcc, mnc)
     }
@@ -52,7 +52,7 @@ class RegistrationApi(
   }
 
   /**
-   * Submit an FCM token to the service as proof that this is an honest user attempting to register.
+   * Submit an ntfy topic to the service as proof that this is the enrolled Android device to receive local wake-up hints.
    *
    * `PATCH /v1/verification/session/{session-id}`
    */
