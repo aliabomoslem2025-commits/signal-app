@@ -226,7 +226,7 @@ class RegistrationViewModel : ViewModel() {
 
   fun fetchFcmToken(context: Context) {
     viewModelScope.launch(context = coroutineExceptionHandler) {
-      val fcmToken = RegistrationRepository.getFcmToken(context)
+      val fcmToken = RegistrationRepository.getNtfyTopic(context)
       store.update {
         it.copy(registrationCheckpoint = RegistrationCheckpoint.PUSH_NETWORK_AUDITED, isFcmSupported = true, fcmToken = fcmToken)
       }
@@ -1132,7 +1132,7 @@ class RegistrationViewModel : ViewModel() {
       password = serverAuthToken,
       registrationId = RegistrationRepository.getRegistrationId(),
       profileKey = profileKey,
-      fcmToken = fcmToken,
+      ntfyTopic = fcmToken,
       pniRegistrationId = RegistrationRepository.getPniRegistrationId(),
       recoveryPassword = null
     )
