@@ -94,7 +94,7 @@ dependencies {
   // Phone number formatting
   implementation(libs.google.libphonenumber)
 
-  // Phone number hint + SMS verification code retriever
+  // Phone number hint only; LAN registration does not use SMS verification.
   implementation(libs.google.play.services.auth)
   implementation(libs.kotlinx.coroutines.play.services)
 
