@@ -25,7 +25,6 @@ import org.signal.core.models.recipients.RecipientId
 import org.signal.core.util.Base64
 import org.signal.core.util.PinHashUtil
 import org.signal.core.util.crypto.DeviceNameCipher
-import org.signal.core.util.eventbus.EventBus
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.protocol.IdentityKeyPair
 import org.signal.libsignal.protocol.util.KeyHelper
@@ -43,7 +42,6 @@ import org.thoughtcrime.securesms.crypto.storage.SignalServiceAccountDataStoreIm
 import org.thoughtcrime.securesms.database.IdentityTable
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobmanager.runJobBlocking
 import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob
 import org.thoughtcrime.securesms.jobs.DirectoryRefreshJob
@@ -68,7 +66,6 @@ import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionC
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionCreationResult
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionResult
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
 import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.viewmodel.SvrAuthCredentialSet
@@ -90,9 +87,6 @@ import org.whispersystems.signalservice.internal.push.VerifyAccountResponse
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.util.Locale
-import java.util.Optional
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -104,15 +98,6 @@ import kotlin.time.Duration.Companion.seconds
 object RegistrationRepository {
 
   private val TAG = Log.tag(RegistrationRepository::class.java)
-
-  private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
-
-  /**
-   * Retrieve the FCM token from the Firebase service.
-   */
-  suspend fun getFcmToken(context: Context): String? = withContext(Dispatchers.Default) {
-    FcmUtil.getToken(context).orElse(null)
-  }
 
   /**
    * Queries, and creates if needed, the local registration ID.
@@ -216,8 +201,6 @@ object RegistrationRepository {
     AppDependencies.recipientCache.clearSelf()
 
     SignalStore.account.setE164(data.e164)
-    SignalStore.account.fcmToken = data.fcmToken
-    SignalStore.account.fcmEnabled = data.fcmEnabled
 
     val now = System.currentTimeMillis()
     saveOwnIdentityKey(selfId, aci, aciProtocolStore, now)
@@ -353,16 +336,10 @@ object RegistrationRepository {
       SignalStore.registration.sessionE164 = e164
       return@withContext localResult
     }
-    val fcmToken: String? = FcmUtil.getToken(context).orElse(null)
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
 
-    val registrationSessionResult = if (fcmToken == null) {
-      Log.d(TAG, "Creating registration session without FCM token.")
-      api.createRegistrationSession(null, mcc, mnc)
-    } else {
-      Log.d(TAG, "Creating registration session with FCM token.")
-      createSessionAndBlockForPushChallenge(api, fcmToken, mcc, mnc)
-    }
+    // This LAN client does not use Firebase or any external push challenge during registration.
+    val registrationSessionResult = api.createRegistrationSession(null, mcc, mnc)
     val result = RegistrationSessionCreationResult.from(registrationSessionResult)
     if (result is RegistrationSessionCreationResult.Success) {
       Log.d(TAG, "Updating registration session and E164 in value store.")
@@ -445,14 +422,6 @@ object RegistrationRepository {
     return@withContext VerificationCodeRequestResult.from(captchaSubmissionResult)
   }
 
-  suspend fun requestAndVerifyPushToken(context: Context, sessionId: String, e164: String, password: String) = withContext(Dispatchers.IO) {
-    val fcmToken = getFcmToken(context)
-    val accountManager = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password)
-    val pushChallenge = PushChallengeRequest.getPushChallengeBlocking(accountManager, sessionId, Optional.ofNullable(fcmToken), PUSH_REQUEST_TIMEOUT).orElse(null)
-    val pushSubmissionResult = accountManager.registrationApi.submitPushChallengeToken(sessionId = sessionId, pushChallengeToken = pushChallenge)
-    return@withContext VerificationCodeRequestResult.from(pushSubmissionResult)
-  }
-
   /**
    * Submit the necessary assets as a verified account so that the user can actually use the service.
    */
@@ -479,7 +448,7 @@ object RegistrationRepository {
     val accountAttributes = AccountAttributes(
       signalingKey = null,
       registrationId = registrationData.registrationId,
-      fetchesMessages = registrationData.isNotFcm,
+      fetchesMessages = true,
       registrationLock = registrationLock,
       unidentifiedAccessKey = unidentifiedAccessKey,
       unrestrictedUnidentifiedAccess = universalUnidentifiedAccess,
@@ -499,7 +468,7 @@ object RegistrationRepository {
     val aciPreKeyCollection = generateSignedAndLastResortPreKeys(aciIdentity, SignalStore.account.aciPreKeys)
     val pniPreKeyCollection = generateSignedAndLastResortPreKeys(pniIdentity, SignalStore.account.pniPreKeys)
 
-    val result: NetworkResult<AccountRegistrationResult> = api.registerAccount(sessionId, registrationData.recoveryPassword, accountAttributes, aciPreKeyCollection, pniPreKeyCollection, registrationData.fcmToken, true)
+    val result: NetworkResult<AccountRegistrationResult> = api.registerAccount(sessionId, registrationData.recoveryPassword, accountAttributes, aciPreKeyCollection, pniPreKeyCollection, null, true)
       .map { accountRegistrationResponse: VerifyAccountResponse ->
         AccountRegistrationResult(
           uuid = accountRegistrationResponse.uuid!!,
@@ -564,7 +533,7 @@ object RegistrationRepository {
     val encryptedDeviceName = DeviceNameCipher.encryptDeviceName(deviceName.toByteArray(StandardCharsets.UTF_8), aciIdentityKeyPair)
 
     val deviceAttributes = DeviceAttributes(
-      fetchesMessages = registrationData.fcmToken == null,
+      fetchesMessages = true,
       registrationId = getRegistrationId(),
       pniRegistrationId = getPniRegistrationId(),
       name = Base64.encodeWithPadding(encryptedDeviceName),
@@ -578,7 +547,7 @@ object RegistrationRepository {
       .getInstance()
       .createUnauthenticated(context, number, -1, registrationData.password)
       .registrationApi
-      .registerAsSecondaryDevice(provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys, registrationData.fcmToken)
+      .registerAsSecondaryDevice(provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys, null)
       .map { response ->
         RegisterAsLinkedDeviceResponse(
           deviceId = response.deviceId.toInt(),
@@ -595,41 +564,6 @@ object RegistrationRepository {
           )
         )
       }
-  }
-
-  private suspend fun createSessionAndBlockForPushChallenge(accountManager: RegistrationApi, fcmToken: String, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> = withContext(Dispatchers.IO) {
-    // TODO [regv2]: do not use event bus nor latch
-    val subscriber = PushTokenChallengeSubscriber()
-    val subscription = EventBus.default.subscribe<PushChallengeRequest.PushChallengeEvent>(handler = subscriber::onChallengeEvent)
-
-    try {
-      Log.d(TAG, "Requesting a registration session with FCM token…")
-      val sessionCreationResponse = accountManager.createRegistrationSession(fcmToken, mcc, mnc)
-      if (sessionCreationResponse !is NetworkResult.Success) {
-        return@withContext sessionCreationResponse
-      }
-
-      val receivedPush = subscriber.latch.await(PUSH_REQUEST_TIMEOUT, TimeUnit.MILLISECONDS)
-
-      if (receivedPush) {
-        val challenge = subscriber.challenge
-        if (challenge != null) {
-          Log.i(TAG, "Push challenge token received.")
-          return@withContext accountManager.submitPushChallengeToken(sessionCreationResponse.result.metadata.id, challenge)
-        } else {
-          Log.w(TAG, "Push received but challenge token was null.")
-        }
-      } else {
-        Log.i(TAG, "Push challenge timed out.")
-      }
-      Log.i(TAG, "Push challenge unsuccessful. Continuing with session created without one.")
-      return@withContext sessionCreationResponse
-    } catch (ex: Exception) {
-      Log.w(TAG, "Exception caught, but the earlier try block should have caught it?", ex)
-      return@withContext NetworkResult.ApplicationError<RegistrationSessionMetadataResponse>(ex)
-    } finally {
-      subscription.unsubscribe()
-    }
   }
 
   suspend fun hasValidSvrAuthCredentials(context: Context, e164: String, password: String): BackupAuthCheckResult = withContext(Dispatchers.IO) {
@@ -765,14 +699,4 @@ object RegistrationRepository {
     PHONE_CALL(false, PushServiceSocket.VerificationCodeTransport.VOICE)
   }
 
-  private class PushTokenChallengeSubscriber {
-    var challenge: String? = null
-    val latch = CountDownLatch(1)
-
-    fun onChallengeEvent(pushChallengeEvent: PushChallengeRequest.PushChallengeEvent) {
-      Log.d(TAG, "Push challenge received!")
-      challenge = pushChallengeEvent.challenge
-      latch.countDown()
-    }
-  }
 }
