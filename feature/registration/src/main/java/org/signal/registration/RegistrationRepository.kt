@@ -171,11 +171,8 @@ class RegistrationRepository(
   fun isLocalAuthEnabled(): Boolean = networkController.isLocalAuthEnabled()
 
   suspend fun createSession(e164: String): RequestResult<SessionMetadata, CreateSessionError> = withContext(Dispatchers.IO) {
-    // LAN device authentication does not require Google/FCM to prove device possession.
-    val fcmToken = if (networkController.isLocalAuthEnabled()) null else networkController.getFcmToken()
     networkController.createSession(
       e164 = e164,
-      fcmToken = fcmToken,
       mcc = null,
       mnc = null
     )
@@ -202,23 +199,7 @@ class RegistrationRepository(
   ): RequestResult<SessionMetadata, UpdateSessionError> = withContext(Dispatchers.IO) {
     networkController.updateSession(
       sessionId = sessionId,
-      pushChallengeToken = null,
       captchaToken = captchaToken
-    )
-  }
-
-  suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
-    networkController.awaitPushChallengeToken()
-  }
-
-  suspend fun submitPushChallengeToken(
-    sessionId: String,
-    pushChallengeToken: String
-  ): RequestResult<SessionMetadata, UpdateSessionError> = withContext(Dispatchers.IO) {
-    networkController.updateSession(
-      sessionId = sessionId,
-      pushChallengeToken = pushChallengeToken,
-      captchaToken = null
     )
   }
 
@@ -916,16 +897,14 @@ class RegistrationRepository(
       }
     }
 
-    val fcmToken = networkController.getFcmToken()
-
     updateAccountData {
-      this.fetchesMessages = fcmToken == null
+      this.fetchesMessages = true
     }
 
     val encryptedDeviceName = DeviceNameCipher.encryptDeviceName(deviceName.toByteArray(StandardCharsets.UTF_8), aciIdentityKeyPair)
 
     val deviceAttributes = DeviceAttributes(
-      fetchesMessages = fcmToken == null,
+      fetchesMessages = true,
       registrationId = keyMaterial.aciRegistrationId,
       pniRegistrationId = keyMaterial.pni?.registrationId,
       name = Base64.encodeWithPadding(encryptedDeviceName),
@@ -953,7 +932,6 @@ class RegistrationRepository(
       deviceAttributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
     )
 
     if (result is RequestResult.Success) {
@@ -1234,7 +1212,7 @@ class RegistrationRepository(
       attributes = accountAttributes,
       aciPreKeys = keyMaterial.toAciPreKeyCollection(),
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
+
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
