@@ -166,7 +166,7 @@ class AppRegistrationNetworkController(
         RequestResult.ApplicationError(e)
       }
     }
-    return registrationApi.createVerificationSession(e164, fcmToken, mcc, mnc)
+    return RequestResult.ApplicationError(IllegalStateException("LAN device authentication is required; SMS registration is disabled"))
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
@@ -180,7 +180,7 @@ class AppRegistrationNetworkController(
         SessionMetadata(sessionId, null, null, null, false, emptyList(), true)
       )
     }
-    return registrationApi.getSessionStatus(sessionId)
+    return RequestResult.ApplicationError(IllegalStateException("Non-LAN registration sessions are disabled"))
   }
 
   override suspend fun updateSession(
@@ -193,11 +193,7 @@ class AppRegistrationNetworkController(
         SessionMetadata(sessionId, null, null, null, false, emptyList(), localDeviceAuthClient.isCompletedLocalSession(sessionId))
       )
     }
-    return registrationApi.updateVerificationSession(
-      sessionId = sessionId,
-      captchaToken = captchaToken,
-      pushChallengeToken = pushChallengeToken
-    )
+    return RequestResult.ApplicationError(IllegalStateException("Non-LAN verification sessions are disabled"))
   }
 
   override suspend fun requestVerificationCode(
@@ -215,7 +211,7 @@ class AppRegistrationNetworkController(
         RequestResult.ApplicationError(e)
       }
     }
-    return registrationApi.requestVerificationCode(sessionId, locale, androidSmsRetrieverSupported, transport)
+    return RequestResult.ApplicationError(IllegalStateException("SMS and voice verification transports are disabled"))
   }
 
   override suspend fun submitVerificationCode(
@@ -231,7 +227,7 @@ class AppRegistrationNetworkController(
         RequestResult.ApplicationError(e)
       }
     }
-    return registrationApi.submitVerificationCode(sessionId, verificationCode)
+    return RequestResult.ApplicationError(IllegalStateException("Non-LAN verification sessions are disabled"))
   }
 
   override suspend fun registerAccount(
