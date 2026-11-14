@@ -104,6 +104,9 @@ import org.thoughtcrime.securesms.jobs.StorageSyncJob;
 import org.thoughtcrime.securesms.jobs.StoryOnboardingDownloadJob;
 import org.thoughtcrime.securesms.keyvalue.SignalStore;
 import org.thoughtcrime.securesms.push.ntfy.NtfySubscriptionService;
+import org.thoughtcrime.securesms.push.ntfy.NtfyTopicManager;
+import org.thoughtcrime.securesms.net.SignalNetwork;
+import org.whispersystems.signalservice.api.RequestResultUtil;
 import org.thoughtcrime.securesms.logging.CustomSignalProtocolLogger;
 import org.thoughtcrime.securesms.logging.PersistentLogger;
 import org.thoughtcrime.securesms.logsubmit.SubmitDebugLogActivity;
@@ -296,7 +299,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
     AppDependencies.getMegaphoneRepository().onAppForegrounded();
     AppDependencies.getDeadlockDetector().start();
     InAppPaymentKeepAliveJob.enqueueAndTrackTimeIfNecessary();
-    NtfySubscriptionService.start(this);
+    initializeNtfyPush();
     startAnrDetector();
 
     SignalExecutors.BOUNDED.execute(() -> {
@@ -511,11 +514,18 @@ public class ApplicationContext extends Application implements AppForegroundObse
       return;
     }
 
-    try {
-      NtfySubscriptionService.start(this);
-    } catch (RuntimeException e) {
-      Log.w(TAG, "Unable to start the private ntfy notification subscription.", e);
-    }
+    SignalExecutors.BOUNDED.execute(() -> {
+      try {
+        final String topic = NtfyTopicManager.getOrCreate(this);
+        if (!SignalStore.account().getNtfyEnabled()) {
+          RequestResultUtil.successOrThrowNoError(SignalNetwork.accountApi().setNtfyTopic(topic));
+          SignalStore.account().setNtfyEnabled(true);
+        }
+        NtfySubscriptionService.start(this);
+      } catch (Exception e) {
+        Log.w(TAG, "Unable to register or start the private ntfy notification subscription.", e);
+      }
+    });
   }
 
   private void initializeExpiringMessageManager() {
