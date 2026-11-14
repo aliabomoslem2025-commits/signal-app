@@ -1170,7 +1170,7 @@ public final class SignalCallManager implements CallManager.Observer, GroupCall.
     }
   }
 
-  private String getConfiguredGroupCallingServer() {
+  String getConfiguredGroupCallingServer() {
     LocalServerConfig config = LocalServerConfig.load(context);
     return config.getLocalAuthOnly()
         ? config.endpoint("sfu")
