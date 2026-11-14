@@ -141,7 +141,6 @@ class DebugNetworkController(
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
@@ -151,7 +150,7 @@ class DebugNetworkController(
       Log.d(TAG, "[registerAccount] Returning debug override")
       return it
     }
-    return delegate.registerAccount(e164, password, sessionId, recoveryPassword, receiptCredentialPresentation, attributes, aciPreKeys, pniPreKeys, fcmToken, skipDeviceTransfer, aci, totp, webAuthnResponse)
+    return delegate.registerAccount(e164, password, sessionId, recoveryPassword, receiptCredentialPresentation, attributes, aciPreKeys, pniPreKeys, skipDeviceTransfer, aci, totp, webAuthnResponse)
   }
 
   override suspend fun getLoginConfiguration(): RequestResult<LoginConfiguration, GetLoginConfigurationError> {
@@ -187,19 +186,6 @@ class DebugNetworkController(
   override fun createReceiptCredentialPresentation(receiptCredential: ReceiptCredential): ReceiptCredentialResult<ReceiptCredentialPresentation> {
     // No override support for pure computations
     return delegate.createReceiptCredentialPresentation(receiptCredential)
-  }
-
-  override suspend fun getFcmToken(): String? {
-    // No override support for simple value methods
-    return delegate.getFcmToken()
-  }
-
-  override suspend fun awaitPushChallengeToken(): String? {
-    if (NetworkDebugState.skipPushChallenge.value) {
-      Log.d(TAG, "[awaitPushChallengeToken] Skipping push challenge (debug override)")
-      return null
-    }
-    return delegate.awaitPushChallengeToken()
   }
 
   override fun getCaptchaUrl(): String {
