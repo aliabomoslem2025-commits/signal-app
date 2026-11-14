@@ -62,7 +62,7 @@ interface NetworkController {
    *
    * `POST /v1/verification/session`
    */
-  suspend fun createSession(e164: String, fcmToken: String?, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError>
+  suspend fun createSession(e164: String, ntfyTopic: String?, mcc: String?, mnc: String?): RequestResult<SessionMetadata, CreateSessionError>
 
   /**
    * Retrieve current status of a registration session.
@@ -128,7 +128,7 @@ interface NetworkController {
     attributes: AccountAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?,
+    ntfyTopic: String?,
     skipDeviceTransfer: Boolean,
     aci: ACI?,
     totp: Int?,
@@ -180,12 +180,12 @@ interface NetworkController {
   fun createReceiptCredentialPresentation(receiptCredential: ReceiptCredential): ReceiptCredentialResult<ReceiptCredentialPresentation>
 
   /**
-   * Retrieves an FCM token, if possible. Null means that this device does not support FCM.
+   * Retrieves an ntfy topic, if possible. Null means that this device does not support ntfy.
    */
-  suspend fun getFcmToken(): String?
+  suspend fun getNtfyTopic(): String?
 
   /**
-   * Waits for a push challenge token to arrive via FCM.
+   * Waits for a push challenge token to arrive via ntfy.
    * This is a suspending function that will complete when the token arrives.
    * The caller should wrap this in withTimeoutOrNull to handle timeout scenarios.
    *
@@ -373,7 +373,7 @@ interface NetworkController {
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
+    ntfyTopic: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError>
 
   /**
