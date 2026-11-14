@@ -51,7 +51,8 @@ class LocalNetworkSettingsActivity : PassphraseRequiredActivity() {
     content.addView(text("Local network configuration", 22f))
     content.addView(text(
       "Edit server-config.json below. All service addresses are validated before saving. " +
-        "HTTPS/WSS and certificate validation are mandatory; SMS and cleartext traffic are disabled."
+        "HTTPS/WSS and certificate validation are mandatory; SMS and cleartext traffic are disabled. " +
+        "Paste your private LAN root/intermediate CA PEM into trustedCaPem so the app can validate the server certificate."
     ))
 
     configEditor = EditText(this).apply {
@@ -166,7 +167,7 @@ class LocalNetworkSettingsActivity : PassphraseRequiredActivity() {
 
     content.addView(text(
       "Important: the app loads network clients at process startup. After changing server endpoints, fully close and reopen Signal. " +
-        "The server certificate must be trusted by Signal's configured service trust store."
+        "The server certificate must chain to a CA configured in trustedCaPem. Do not disable TLS validation or use a self-signed trust-all workaround."
     ))
 
     setContentView(ScrollView(this).apply {
