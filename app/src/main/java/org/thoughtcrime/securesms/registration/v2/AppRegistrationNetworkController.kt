@@ -366,16 +366,11 @@ class AppRegistrationNetworkController(
   }
 
   override suspend fun getNtfyTopic(): String? {
-    return try {
-      val topic = NtfyTopicManager.getOrCreate(context)
-      if (!NtfySubscriptionService.awaitConnected(15_000L)) {
-        throw IOException("Unable to connect to the configured ntfy server")
-      }
-      topic
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to connect to the private ntfy service", e)
-      null
+    val topic = NtfyTopicManager.getOrCreate(context)
+    if (!NtfySubscriptionService.awaitConnected(15_000L)) {
+      throw IOException("Unable to connect to the configured ntfy server")
     }
+    return topic
   }
 
   override suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
