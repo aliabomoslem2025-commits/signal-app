@@ -48,7 +48,7 @@ import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.messages.IncomingMessageObserver
 import org.thoughtcrime.securesms.payments.Payments
 import org.thoughtcrime.securesms.push.SignalServiceNetworkAccess
-import org.thoughtcrime.securesms.push.SignalServiceTrustStore
+import org.thoughtcrime.securesms.push.LocalServerTrustStore
 import org.whispersystems.signalservice.api.SignalServiceAccountManager
 import org.whispersystems.signalservice.api.SignalServiceMessageReceiver
 import org.whispersystems.signalservice.api.SignalServiceMessageSender
@@ -270,7 +270,7 @@ class NetworkDependenciesModule(
     try {
       val baseClient = okHttpClient
       val sslContext = SSLContext.getInstance("TLS")
-      val trustStore: TrustStore = SignalServiceTrustStore(application)
+      val trustStore: TrustStore = LocalServerTrustStore(application)
       val trustManagers = BlacklistingTrustManager.createFor(trustStore)
 
       sslContext.init(null, trustManagers, null)
