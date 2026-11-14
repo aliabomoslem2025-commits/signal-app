@@ -332,7 +332,7 @@ class AppRegistrationNetworkController(
     totp: Int?,
     webAuthnResponse: String?
   ): RequestResult<RegisterAccountResponse, RegisterAccountError> {
-    return registrationApi.registerAccount(
+    val result = registrationApi.registerAccount(
       e164 = e164,
       password = password,
       sessionId = sessionId,
@@ -347,6 +347,12 @@ class AppRegistrationNetworkController(
       totp = totp,
       webAuthnResponse = webAuthnResponse
     )
+
+    if (result is RequestResult.Success && sessionId != null && localAuthPendingStore.phoneForSession(sessionId) != null) {
+      localAuthPendingStore.clearSession(sessionId)
+    }
+
+    return result
   }
 
   override suspend fun getLoginConfiguration(): RequestResult<LoginConfiguration, GetLoginConfigurationError> {
