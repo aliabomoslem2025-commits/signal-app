@@ -51,10 +51,6 @@ class AccountValues internal constructor(store: KeyValueStore, context: Context)
     private val TAG = Log.tag(AccountValues::class.java)
     private const val KEY_SERVICE_PASSWORD = "account.service_password"
     private const val KEY_REGISTRATION_ID = "account.registration_id"
-    private const val KEY_FCM_ENABLED = "account.fcm_enabled"
-    private const val KEY_FCM_TOKEN = "account.fcm_token"
-    private const val KEY_FCM_TOKEN_VERSION = "account.fcm_token_version"
-    private const val KEY_FCM_TOKEN_LAST_SET_TIME = "account.fcm_token_last_set_time"
     private const val KEY_NTFY_ENABLED = "account.ntfy_enabled"
     private const val KEY_NTFY_TOPIC = "account.ntfy_topic"
     private const val KEY_DEVICE_NAME = "account.device_name"
@@ -485,32 +481,6 @@ class AccountValues internal constructor(store: KeyValueStore, context: Context)
     override var lastResortKyberPreKeyRotationTime: Long by longValue(KEY_PNI_LAST_RESORT_KYBER_PREKEY_ROTATION_TIME, 0)
   }
 
-  /** Indicates whether the user has the ability to receive FCM messages. Largely coupled to whether they have Play Service. */
-  @get:JvmName("isFcmEnabled")
-  var fcmEnabled: Boolean by booleanValue(KEY_FCM_ENABLED, false)
-
-  /** The FCM token, which allows the server to send us FCM messages. */
-  var fcmToken: String?
-    get() {
-      val tokenVersion: Int = getInteger(KEY_FCM_TOKEN_VERSION, 0)
-      return if (tokenVersion == Util.getCanonicalVersionCode()) {
-        getString(KEY_FCM_TOKEN, null)
-      } else {
-        null
-      }
-    }
-    set(value) {
-      store.beginWrite()
-        .putString(KEY_FCM_TOKEN, value)
-        .putInteger(KEY_FCM_TOKEN_VERSION, Util.getCanonicalVersionCode())
-        .putLong(KEY_FCM_TOKEN_LAST_SET_TIME, System.currentTimeMillis())
-        .apply()
-    }
-
-  /** When we last set the [fcmToken] */
-  val fcmTokenLastSetTime: Long
-    get() = getLong(KEY_FCM_TOKEN_LAST_SET_TIME, 0)
-
   /** Whether this device is enrolled for private, self-hosted ntfy wake-up hints. */
   var ntfyEnabled: Boolean by booleanValue(KEY_NTFY_ENABLED, false)
 
@@ -714,10 +684,6 @@ class AccountValues internal constructor(store: KeyValueStore, context: Context)
     putString(KEY_SERVICE_PASSWORD, LegacySharedPrefs.getStringOrNull(context, "pref_gcm_password"))
     putBoolean(KEY_IS_REGISTERED, LegacySharedPrefs.getBoolean(context, "pref_gcm_registered", false))
     putInteger(KEY_REGISTRATION_ID, LegacySharedPrefs.getInteger(context, "pref_local_registration_id", 0))
-    putBoolean(KEY_FCM_ENABLED, !LegacySharedPrefs.getBoolean(context, "pref_gcm_disabled", false))
-    putString(KEY_FCM_TOKEN, LegacySharedPrefs.getStringOrNull(context, "pref_gcm_registration_id"))
-    putInteger(KEY_FCM_TOKEN_VERSION, LegacySharedPrefs.getInteger(context, "pref_gcm_registration_id_version", 0))
-    putLong(KEY_FCM_TOKEN_LAST_SET_TIME, LegacySharedPrefs.getLong(context, "pref_gcm_registration_id_last_set_time", 0))
   }
 
   /** Do not alter. If you need to migrate more stuff, create a new method. */
