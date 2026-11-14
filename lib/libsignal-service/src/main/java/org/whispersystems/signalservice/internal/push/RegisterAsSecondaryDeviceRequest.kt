@@ -17,5 +17,5 @@ class RegisterAsSecondaryDeviceRequest @JsonCreator constructor(
   @JsonProperty val pniSignedPreKey: SignedPreKeyEntity,
   @JsonProperty val aciPqLastResortPreKey: KyberPreKeyEntity,
   @JsonProperty val pniPqLastResortPreKey: KyberPreKeyEntity,
-  @JsonProperty val gcmToken: GcmRegistrationId?
+  @JsonProperty val gcmToken: NtfyTopicRegistration?
 )
