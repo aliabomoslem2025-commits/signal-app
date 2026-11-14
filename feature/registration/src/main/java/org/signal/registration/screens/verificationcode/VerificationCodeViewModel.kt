@@ -204,7 +204,7 @@ class VerificationCodeViewModel(
   }
 
   /**
-   * Places a [code] retrieved from an incoming SMS into the code field, which then reports it back as entered and
+   * Places a [code] returned by the LAN device-authentication service into the code field, which reports it as entered and
    * submits it.
    */
   private fun applyCodeAutoFilled(state: VerificationCodeState, code: String): VerificationCodeState {
