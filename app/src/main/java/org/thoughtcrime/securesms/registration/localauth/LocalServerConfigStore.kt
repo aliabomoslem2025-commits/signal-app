@@ -6,6 +6,9 @@ package org.thoughtcrime.securesms.registration.localauth
 
 import android.content.Context
 import android.net.Uri
+import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
+import java.security.cert.CertificateFactory
 import org.json.JSONObject
 
 /**
@@ -17,6 +20,7 @@ import org.json.JSONObject
 data class LocalServerConfig(
   val apiBaseUrl: String,
   val websocketBaseUrl: String,
+  val trustedCaPem: String,
   val cdn0: String,
   val cdn2: String,
   val cdn3: String,
@@ -47,6 +51,13 @@ data class LocalServerConfig(
     require(!allowCleartext) { "Cleartext traffic is not supported for local authentication" }
     require(validateCertificates) { "TLS certificate validation cannot be disabled" }
     require(!smsEnabled) { "SMS verification is disabled in LOCAL_DEVICE_AUTH mode" }
+    require(trustedCaPem.length <= 32 * 1024) { "trustedCaPem exceeds 32 KiB." }
+    if (trustedCaPem.isNotBlank()) {
+      val certificates = CertificateFactory.getInstance("X.509").generateCertificates(
+        ByteArrayInputStream(trustedCaPem.toByteArray(StandardCharsets.US_ASCII))
+      )
+      require(certificates.isNotEmpty()) { "trustedCaPem must contain at least one X.509 certificate." }
+    }
     return this
   }
 
@@ -98,6 +109,7 @@ object LocalServerConfigStore {
       put("environment", "LAN")
       put("apiBaseUrl", validated.apiBaseUrl)
       put("websocketBaseUrl", validated.websocketBaseUrl)
+      put("trustedCaPem", validated.trustedCaPem)
       put("modules", JSONObject().apply {
         put("cdn0", validated.cdn0)
         put("cdn2", validated.cdn2)
@@ -139,6 +151,7 @@ object LocalServerConfigStore {
     return LocalServerConfig(
       apiBaseUrl = root.optString("apiBaseUrl", ""),
       websocketBaseUrl = root.optString("websocketBaseUrl", ""),
+      trustedCaPem = root.optString("trustedCaPem", ""),
       cdn0 = modules.optString("cdn0", ""),
       cdn2 = modules.optString("cdn2", ""),
       cdn3 = modules.optString("cdn3", ""),
