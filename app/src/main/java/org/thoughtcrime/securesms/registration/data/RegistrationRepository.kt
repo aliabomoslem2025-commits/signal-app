@@ -70,6 +70,7 @@ import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionR
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
 import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
 import org.thoughtcrime.securesms.registration.local.LocalServerConfig
+import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.viewmodel.SvrAuthCredentialSet
 import org.thoughtcrime.securesms.service.DirectoryRefreshListener
 import org.thoughtcrime.securesms.service.RotateSignedPreKeyListener
@@ -310,6 +311,22 @@ object RegistrationRepository {
    * Validates a session ID.
    */
   private suspend fun validateSession(context: Context, sessionId: String, e164: String, password: String): RegistrationSessionCheckResult = withContext(Dispatchers.IO) {
+    if (LocalServerConfig.load(context).localAuthOnly) {
+      val localAuth = LocalDeviceAuthClient(context)
+      if (localAuth.isChallengeSession(sessionId)) {
+        return@withContext RegistrationSessionCheckResult.Success(
+          sessionId, 0.seconds, 0.seconds, 0.seconds, true, emptyList(), false
+        )
+      }
+      if (localAuth.isCompletedLocalSession(sessionId)) {
+        return@withContext RegistrationSessionCheckResult.Success(
+          sessionId, 0.seconds, 0.seconds, 0.seconds, false, emptyList(), true
+        )
+      }
+      return@withContext RegistrationSessionCheckResult.SessionNotFound(
+        IllegalStateException("Local authentication session is invalid or expired")
+      )
+    }
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
     Log.d(TAG, "Validating registration session with service.")
     val registrationSessionResult = api.getRegistrationSessionStatus(sessionId)
@@ -321,6 +338,21 @@ object RegistrationRepository {
    */
   suspend fun createSession(context: Context, e164: String, password: String, mcc: String?, mnc: String?): RegistrationSessionCreationResult = withContext(Dispatchers.IO) {
     Log.d(TAG, "About to create a registration session…")
+    if (LocalServerConfig.load(context).localAuthOnly) {
+      val metadata = LocalDeviceAuthClient(context).createSession(e164)
+      val localResult = RegistrationSessionCreationResult.Success(
+        sessionId = metadata.id,
+        nextSmsTimestamp = 0.seconds,
+        nextCallTimestamp = 0.seconds,
+        nextVerificationAttempt = 0.seconds,
+        allowedToRequestCode = true,
+        challengesRequested = emptyList(),
+        verified = false
+      )
+      SignalStore.registration.sessionId = localResult.sessionId
+      SignalStore.registration.sessionE164 = e164
+      return@withContext localResult
+    }
     val fcmToken: String? = FcmUtil.getToken(context).orElse(null)
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
 
@@ -379,7 +411,10 @@ object RegistrationRepository {
    */
   suspend fun requestSmsCode(context: Context, sessionId: String, e164: String, password: String, mode: E164VerificationMode): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
     if (LocalServerConfig.load(context).localAuthOnly) {
-      throw IllegalStateException("SMS and voice verification are disabled. Enroll this device for the phone number in the LAN dashboard.")
+      val metadata = LocalDeviceAuthClient(context).requestCode(sessionId)
+      return@withContext VerificationCodeRequestResult.Success(
+        metadata.id, 0.seconds, 0.seconds, 0.seconds, false, emptyList(), false
+      )
     }
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
     val codeRequestResult = api.requestSmsVerificationCode(sessionId, Locale.getDefault(), mode.isSmsRetrieverSupported, mode.transport)
@@ -390,6 +425,12 @@ object RegistrationRepository {
    * Submits the user-entered verification code to the service.
    */
   suspend fun submitVerificationCode(context: Context, sessionId: String, registrationData: RegistrationData): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
+    if (LocalServerConfig.load(context).localAuthOnly) {
+      val metadata = LocalDeviceAuthClient(context).submitCode(sessionId, registrationData.code)
+      return@withContext VerificationCodeRequestResult.Success(
+        metadata.id, 0.seconds, 0.seconds, 0.seconds, false, emptyList(), true
+      )
+    }
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, registrationData.e164, SignalServiceAddress.DEFAULT_DEVICE_ID, registrationData.password).registrationApi
     val result = api.verifyAccount(sessionId = sessionId, verificationCode = registrationData.code)
     return@withContext VerificationCodeRequestResult.from(result)
