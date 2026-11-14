@@ -134,6 +134,10 @@ class NtfySubscriptionService : Service() {
           }
           connected = true
           connectedLatch.countDown()
+          // Signal Server keeps the actual encrypted messages in its own queue. Fetch on every
+          // successful (re)connection so a device that temporarily lost its ntfy stream still
+          // catches up even when wake hints were not cached by ntfy.
+          enqueueSignalFetch()
           val source = response.body?.source() ?: throw IOException("ntfy returned an empty response body")
           backoff = 1_000L
           while (running) {
@@ -248,7 +252,8 @@ class NtfySubscriptionService : Service() {
     connected = false
     currentResponse?.close()
     subscriptionExecutor?.shutdownNow()
-    fetchExecutor?.shutdown()
+    fetchExecutor?.shutdownNow()
+    stopForeground(true)
     subscriptionExecutor = null
     fetchExecutor = null
     super.onDestroy()
