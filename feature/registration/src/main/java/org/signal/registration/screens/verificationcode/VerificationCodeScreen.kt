@@ -226,7 +226,6 @@ private fun OnePaneLayout(
             .padding(params.footerPadding),
           horizontalArrangement = Arrangement.SpaceAround
         ) {
-          AlternateCodeOptions(state, onEvent)
         }
       }
     }
@@ -328,59 +327,6 @@ private fun CodeField(state: VerificationCodeState, onEvent: (VerificationCodeSc
           .align(Alignment.CenterHorizontally)
       )
     }
-  }
-}
-
-@Composable
-private fun AlternateCodeOptions(state: VerificationCodeState, onEvent: (VerificationCodeScreenEvents) -> Unit) {
-  val disabledColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-
-  val canResendSms = state.canResendSms()
-  val smsCountdown = state.smsResendCountdown()
-  TextButton(
-    onClick = { onEvent(VerificationCodeScreenEvents.ResendSms) },
-    enabled = canResendSms,
-    modifier = Modifier
-      .testTag(TestTags.VERIFICATION_CODE_RESEND_SMS_BUTTON)
-  ) {
-    Text(
-      text = if (smsCountdown != null) {
-        val totalSeconds = smsCountdown.inWholeSeconds.toInt()
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        stringResource(R.string.VerificationCodeScreen__resend_code_available_in, minutes, seconds)
-      } else {
-        stringResource(R.string.VerificationCodeScreen__resend_code)
-      },
-      color = if (canResendSms) MaterialTheme.colorScheme.primary else disabledColor,
-      textAlign = TextAlign.Center,
-      style = MaterialTheme.typography.labelLarge
-    )
-  }
-
-  Spacer(modifier = Modifier.width(8.dp))
-
-  val canRequestCall = state.canRequestCall()
-  val callCountdown = state.callRequestCountdown()
-  TextButton(
-    onClick = { onEvent(VerificationCodeScreenEvents.CallMe) },
-    enabled = canRequestCall,
-    modifier = Modifier
-      .testTag(TestTags.VERIFICATION_CODE_CALL_ME_BUTTON)
-  ) {
-    Text(
-      text = if (callCountdown != null) {
-        val totalSeconds = callCountdown.inWholeSeconds.toInt()
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        stringResource(R.string.VerificationCodeScreen__call_me_available_in, minutes, seconds)
-      } else {
-        stringResource(R.string.VerificationCodeScreen__call_me_instead)
-      },
-      color = if (canRequestCall) MaterialTheme.colorScheme.primary else disabledColor,
-      textAlign = TextAlign.Center,
-      style = MaterialTheme.typography.labelLarge
-    )
   }
 }
 
