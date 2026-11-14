@@ -19,6 +19,7 @@ import org.thoughtcrime.securesms.registration.v2.localauth.LocalDeviceAuthClien
  */
 class LocalServerSettingsActivity : AppCompatActivity() {
   private lateinit var configEditor: EditText
+  private lateinit var pinEditor: EditText
 
   private val importConfig = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
     if (uri != null) readText(uri)?.let { configEditor.setText(it) }
@@ -95,7 +96,46 @@ class LocalServerSettingsActivity : AppCompatActivity() {
     root.addView(TextView(this).apply {
       text = "فایل اطلاعات دستگاه فقط شامل Android ID و کلید عمومی است. کلید خصوصی در Android Keystore باقی می‌ماند و هرگز صادر نمی‌شود. بعد از ذخیره تنظیمات، برنامه را مجدداً اجرا کنید."
       textSize = 12f
-      setPadding(0, dp(12), 0, 0)
+      setPadding(0, dp(12), 0, dp(18))
+    })
+
+    root.addView(TextView(this).apply {
+      text = "قفل PIN محلی برنامه"
+      textSize = 18f
+      setPadding(0, dp(14), 0, dp(4))
+    })
+    root.addView(TextView(this).apply {
+      text = if (LocalAppPinManager.isEnabled(this@LocalServerSettingsActivity)) {
+        "PIN فعال است؛ هنگام بازگشت به برنامه درخواست می‌شود."
+      } else {
+        "PIN غیرفعال است."
+      }
+      textSize = 12f
+    })
+    pinEditor = EditText(this).apply {
+      hint = "PIN شش تا دوازده رقمی"
+      inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+      maxLines = 1
+      filters = arrayOf(android.text.InputFilter.LengthFilter(12))
+    }
+    root.addView(pinEditor, LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+    ))
+    root.addView(button("فعال‌سازی یا تغییر PIN") {
+      runCatching { LocalAppPinManager.setPin(this, pinEditor.text.toString()) }
+        .onSuccess {
+          pinEditor.text?.clear()
+          toast("PIN فعال شد و هنگام بازگشت بعدی به برنامه درخواست می‌شود.")
+        }
+        .onFailure { toast(it.message ?: "PIN معتبر نیست.") }
+    })
+    root.addView(button("غیرفعال‌سازی PIN با PIN فعلی") {
+      runCatching { LocalAppPinManager.disable(this, pinEditor.text.toString()) }
+        .onSuccess {
+          pinEditor.text?.clear()
+          toast("قفل PIN غیرفعال شد.")
+        }
+        .onFailure { toast(it.message ?: "PIN فعلی صحیح نیست.") }
     })
 
     val scroll = ScrollView(this).apply { addView(root) }
