@@ -90,7 +90,6 @@ import org.thoughtcrime.securesms.backup.v2.BackupRepository
 import org.thoughtcrime.securesms.backup.v2.RestoreTimestampResult
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileContentUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileKeyUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceSyncRequestJob
@@ -105,7 +104,6 @@ import org.thoughtcrime.securesms.pin.SvrWrongPinException
 import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
 import org.thoughtcrime.securesms.recipients.Recipient
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
 import org.thoughtcrime.securesms.registration.ui.restore.StorageServiceRestore
 import org.thoughtcrime.securesms.registration.ui.restore.e164OrNull
 import org.thoughtcrime.securesms.registration.ui.restore.pniIdentityKeyPair
@@ -147,13 +145,11 @@ class AppRegistrationNetworkController(
 
   companion object {
     private val TAG = Log.tag(AppRegistrationNetworkController::class)
-    private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
     private val RETRY_BACKOFF = 5.seconds
   }
 
   override suspend fun createSession(
     e164: String,
-    fcmToken: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
@@ -185,7 +181,6 @@ class AppRegistrationNetworkController(
 
   override suspend fun updateSession(
     sessionId: String,
-    pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
     if (localDeviceAuthClient.isChallengeSession(sessionId) || localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
@@ -267,7 +262,6 @@ class AppRegistrationNetworkController(
       attributes = attributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
@@ -311,37 +305,6 @@ class AppRegistrationNetworkController(
     } catch (e: VerificationFailedException) {
       Log.w(TAG, "Could not verify the receipt credential while building its presentation.", e)
       ReceiptCredentialResult.VerificationFailed
-    }
-  }
-
-  override suspend fun getFcmToken(): String? {
-    return try {
-      FcmUtil.getToken(context).orElse(null)
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to get FCM token", e)
-      null
-    }
-  }
-
-  override suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
-    try {
-      val latch = CountDownLatch(1)
-      val challenge = AtomicReference<String>()
-
-      val subscription = EventBus.default.subscribe<PushChallengeRequest.PushChallengeEvent> { event ->
-        challenge.set(event.challenge)
-        latch.countDown()
-      }
-
-      try {
-        latch.await(PUSH_REQUEST_TIMEOUT, TimeUnit.MILLISECONDS)
-        challenge.get()
-      } finally {
-        subscription.unsubscribe()
-      }
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to await push challenge token", e)
-      null
     }
   }
 
@@ -823,9 +786,8 @@ class AppRegistrationNetworkController(
     provisioningCode: String,
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
-    pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
-  ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
+    pniPreKeys: PreKeyCollection?
+    ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
     return registrationApi.registerAsSecondaryDevice(
       aci = aci,
       password = password,
@@ -833,7 +795,6 @@ class AppRegistrationNetworkController(
       attributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
     )
   }
 
