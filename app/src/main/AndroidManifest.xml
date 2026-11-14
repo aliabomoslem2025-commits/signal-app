@@ -1645,5 +1645,10 @@
 
         </provider>
 
+        <activity
+            android:name=".network.local.LocalServerSettingsActivity"
+            android:exported="false"
+            android:label="شبکه محلی و احراز هویت"
+            android:theme="@style/TextSecure.LightTheme" />
     </application>
 </manifest>
