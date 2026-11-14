@@ -135,12 +135,27 @@ class LocalServerConfig private constructor(
 
   private fun normalizedTurnEndpoint(value: String): String {
     val trimmed = value.trim()
-    val uri = java.net.URI(trimmed)
-    val scheme = uri.scheme?.lowercase()
+    val separator = trimmed.indexOf(':')
+    require(separator > 0) { "TURN endpoint must use turn: or turns:" }
+
+    val scheme = trimmed.substring(0, separator).lowercase()
     require(scheme == "turn" || scheme == "turns") { "TURN endpoint must use turn: or turns:" }
-    require(uri.host != null && uri.userInfo == null && uri.query == null && uri.fragment == null) {
-      "Invalid TURN endpoint"
-    }
+
+    // TURN URLs are opaque URIs (turn:host:3478), so parse their authority via a temporary
+    // hierarchical HTTPS URI rather than asking java.net.URI for host on the opaque URI.
+    val authorityAndQuery = trimmed.substring(separator + 1)
+    require(authorityAndQuery.isNotBlank()) { "Invalid TURN endpoint" }
+    val parsed = java.net.URI("https://$authorityAndQuery")
+    val query = parsed.rawQuery
+    require(
+      parsed.host != null &&
+        parsed.rawUserInfo == null &&
+        parsed.rawFragment == null &&
+        (parsed.rawPath == null || parsed.rawPath.isEmpty()) &&
+        (query == null || query == "transport=udp" || query == "transport=tcp") &&
+        (parsed.port == -1 || parsed.port in 1..65535)
+    ) { "Invalid TURN endpoint" }
+
     return trimmed
   }
 
