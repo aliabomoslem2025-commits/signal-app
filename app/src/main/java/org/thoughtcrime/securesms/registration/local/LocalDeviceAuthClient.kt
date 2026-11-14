@@ -41,6 +41,8 @@ class LocalDeviceAuthClient(context: Context) {
   }
 
   suspend fun createSession(phone: String): SessionMetadata = withContext(Dispatchers.IO) {
+    // Create the stable hardware-backed key before the admin enrollment handshake.
+    keyStore.getOrCreateKeyPair()
     val challenge = post(
       "/v1/local-auth/challenge",
       JSONObject()
