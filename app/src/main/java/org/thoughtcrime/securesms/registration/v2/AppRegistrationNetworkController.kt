@@ -245,6 +245,19 @@ class AppRegistrationNetworkController(
     totp: Int?,
     webAuthnResponse: String?
   ): RequestResult<RegisterAccountResponse, RegisterAccountError> {
+    // Registration must be backed by the one-time LAN ticket returned by /complete.
+    // Do not let phone-numberless or recovery-password paths bypass device enrollment.
+    if (e164.isNullOrBlank() || sessionId.isNullOrBlank() || !localDeviceAuthClient.isCompletedLocalSession(sessionId)) {
+      return RequestResult.ApplicationError(
+        IllegalStateException("A verified local device-authentication ticket is required to register this account")
+      )
+    }
+    if (!recoveryPassword.isNullOrBlank()) {
+      return RequestResult.ApplicationError(
+        IllegalStateException("Recovery-password registration is disabled in LAN-only mode")
+      )
+    }
+
     return registrationApi.registerAccount(
       e164 = e164,
       password = password,
