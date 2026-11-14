@@ -79,6 +79,9 @@ sealed interface AppSettingsEvent {
   /** The user tapped the internal preferences row. */
   data object InternalClicked : AppSettingsEvent
 
+  /** The user tapped local server and device authentication settings. */
+  data object LocalServerSetupClicked : AppSettingsEvent
+
   /** The snackbar in [AppSettingsState.snackbar] has gone away. */
   data object SnackbarDismissed : AppSettingsEvent
 }

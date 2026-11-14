@@ -80,6 +80,7 @@ object AppSettingsTestTags {
   const val ROW_INVITE = "row-invite"
   const val ROW_LABS = "row-labs"
   const val ROW_INTERNAL = "row-internal"
+  const val ROW_LOCAL_SERVER = "row-local-server"
 }
 
 /**
@@ -327,6 +328,15 @@ fun AppSettingsScreen(
 
         item {
           Dividers.Default()
+        }
+
+        item {
+          Rows.TextRow(
+            text = "شبکه محلی و احراز هویت",
+            icon = SignalIcons.Key.painter,
+            onClick = { onEvent(AppSettingsEvent.LocalServerSetupClicked) },
+            modifier = Modifier.testTag(AppSettingsTestTags.ROW_LOCAL_SERVER)
+          )
         }
 
         item {

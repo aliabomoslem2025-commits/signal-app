@@ -671,7 +671,7 @@ class PhoneNumberEntryViewModel(
 
     val verificationCodeResponse = this@PhoneNumberEntryViewModel.repository.requestVerificationCode(
       sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
+      smsAutoRetrieveCodeSupported = false,
       transport = VerificationCodeTransport.SMS
     )
 
@@ -793,7 +793,7 @@ class PhoneNumberEntryViewModel(
 
     val verificationCodeResponse = this@PhoneNumberEntryViewModel.repository.requestVerificationCode(
       sessionId = sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
+      smsAutoRetrieveCodeSupported = false,
       transport = VerificationCodeTransport.SMS
     )
 

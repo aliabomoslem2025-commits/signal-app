@@ -66,6 +66,7 @@ import org.signal.network.service.UsernameService.ConfirmUsernameError
 import org.signal.network.service.UsernameService.ConfirmedUsername
 import org.signal.network.service.UsernameService.ReserveUsernameError
 import org.signal.registration.LinkAndSyncWaitResult
+import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.NetworkController
 import org.signal.registration.NetworkController.BackupMasterKeyError
 import org.signal.registration.NetworkController.GetSvrCredentialsError
@@ -105,6 +106,9 @@ import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
 import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
+import org.thoughtcrime.securesms.network.local.LocalServerConfigStore
+import org.thoughtcrime.securesms.registration.v2.localauth.LocalAuthSessionRegistry
+import org.thoughtcrime.securesms.registration.v2.localauth.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.ui.restore.StorageServiceRestore
 import org.thoughtcrime.securesms.registration.ui.restore.e164OrNull
 import org.thoughtcrime.securesms.registration.ui.restore.pniIdentityKeyPair
@@ -152,10 +156,45 @@ class AppRegistrationNetworkController(
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
-    return registrationApi.createVerificationSession(e164, fcmToken, mcc, mnc)
+    return withContext(Dispatchers.IO) {
+      try {
+        val config = LocalServerConfigStore.load(context)
+        if (!config.localAuthEnabled) {
+          throw IllegalStateException("LAN-only mode is required; SMS verification is disabled.")
+        }
+
+        val challenge = LocalDeviceAuthClient(context).beginRegistration(e164)
+        LocalAuthSessionRegistry.put(challenge.challengeId, e164, challenge.verificationCode)
+        RequestResult.Success(
+          SessionMetadata(
+            id = challenge.challengeId,
+            nextSms = null,
+            nextCall = null,
+            nextVerificationAttempt = null,
+            allowedToRequestCode = true,
+            requestedInformation = emptyList(),
+            verified = false
+          )
+        )
+      } catch (error: CancellationException) {
+        throw error
+      } catch (error: Exception) {
+        Log.w(TAG, "Local device authorization could not create a registration challenge.", error)
+        RequestResult.ApplicationError(error)
+      }
+    }
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
+    if (LocalAuthSessionRegistry.get(sessionId) != null) {
+      return RequestResult.Success(localPendingSession(sessionId))
+    }
+    if (LocalAuthSessionRegistry.isLocalRegistrationSession(sessionId)) {
+      return RequestResult.Success(localVerifiedSession(sessionId))
+    }
+    if (LocalServerConfigStore.load(context).localAuthEnabled) {
+      return RequestResult.ApplicationError(IllegalStateException("Unknown local registration session."))
+    }
     return registrationApi.getSessionStatus(sessionId)
   }
 
@@ -164,6 +203,15 @@ class AppRegistrationNetworkController(
     pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
+    if (LocalAuthSessionRegistry.get(sessionId) != null) {
+      return RequestResult.Success(localPendingSession(sessionId))
+    }
+    if (LocalAuthSessionRegistry.isLocalRegistrationSession(sessionId)) {
+      return RequestResult.Success(localVerifiedSession(sessionId))
+    }
+    if (LocalServerConfigStore.load(context).localAuthEnabled) {
+      return RequestResult.ApplicationError(IllegalStateException("Unknown local registration session."))
+    }
     return registrationApi.updateVerificationSession(
       sessionId = sessionId,
       captchaToken = captchaToken,
@@ -177,6 +225,19 @@ class AppRegistrationNetworkController(
     androidSmsRetrieverSupported: Boolean,
     transport: VerificationCodeTransport
   ): RequestResult<SessionMetadata, RequestVerificationCodeError> {
+    val pending = LocalAuthSessionRegistry.get(sessionId)
+    if (pending != null) {
+      return try {
+        LocalAuthCodeBus.offer(pending.code)
+        RequestResult.Success(localPendingSession(sessionId).copy(allowedToRequestCode = false))
+      } catch (error: Exception) {
+        Log.w(TAG, "Could not hand off the local verification code to the registration screen.", error)
+        RequestResult.ApplicationError(error)
+      }
+    }
+    if (LocalServerConfigStore.load(context).localAuthEnabled) {
+      return RequestResult.ApplicationError(IllegalStateException("SMS and voice verification are disabled in LAN-only mode."))
+    }
     return registrationApi.requestVerificationCode(sessionId, locale, androidSmsRetrieverSupported, transport)
   }
 
@@ -184,7 +245,52 @@ class AppRegistrationNetworkController(
     sessionId: String,
     verificationCode: String
   ): RequestResult<SessionMetadata, SubmitVerificationCodeError> {
+    val pending = LocalAuthSessionRegistry.get(sessionId)
+    if (pending != null) {
+      return withContext(Dispatchers.IO) {
+        try {
+          val serverSessionId = LocalDeviceAuthClient(context).completeVerification(sessionId, verificationCode)
+          LocalAuthSessionRegistry.remove(sessionId)
+          RequestResult.Success(localVerifiedSession(serverSessionId))
+        } catch (error: CancellationException) {
+          throw error
+        } catch (error: Exception) {
+          Log.w(TAG, "Local device authorization rejected the submitted verification code.", error)
+          RequestResult.ApplicationError(error)
+        }
+      }
+    }
+    if (LocalAuthSessionRegistry.isLocalRegistrationSession(sessionId)) {
+      return RequestResult.Success(localVerifiedSession(sessionId))
+    }
+    if (LocalServerConfigStore.load(context).localAuthEnabled) {
+      return RequestResult.ApplicationError(IllegalStateException("Unknown local verification session."))
+    }
     return registrationApi.submitVerificationCode(sessionId, verificationCode)
+  }
+
+  private fun localPendingSession(challengeId: String): SessionMetadata {
+    return SessionMetadata(
+      id = challengeId,
+      nextSms = null,
+      nextCall = null,
+      nextVerificationAttempt = null,
+      allowedToRequestCode = true,
+      requestedInformation = emptyList(),
+      verified = false
+    )
+  }
+
+  private fun localVerifiedSession(serverSessionId: String): SessionMetadata {
+    return SessionMetadata(
+      id = serverSessionId,
+      nextSms = null,
+      nextCall = null,
+      nextVerificationAttempt = null,
+      allowedToRequestCode = false,
+      requestedInformation = emptyList(),
+      verified = true
+    )
   }
 
   override suspend fun registerAccount(
