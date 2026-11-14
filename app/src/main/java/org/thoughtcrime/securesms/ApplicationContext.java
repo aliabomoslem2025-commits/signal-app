@@ -40,7 +40,6 @@ import org.signal.core.util.DeviceProperties;
 import org.signal.core.util.DiskUtil;
 import org.signal.core.util.MemoryTracker;
 import org.signal.core.util.PartAuthorityUris;
-import org.signal.core.util.PlayServicesUtil;
 import org.signal.core.util.Util;
 import org.signal.core.util.concurrent.AnrDetector;
 import org.signal.core.util.concurrent.SignalExecutors;
@@ -74,7 +73,6 @@ import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
 import org.thoughtcrime.securesms.dependencies.AppRemoteConfigDependencies;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencyProvider;
-import org.thoughtcrime.securesms.gcm.FcmFetchManager;
 import org.thoughtcrime.securesms.glide.SignalGlideComponents;
 import org.thoughtcrime.securesms.jobmanager.impl.SealedSenderConstraint;
 import org.thoughtcrime.securesms.jobs.AccountConsistencyWorkerJob;
@@ -86,7 +84,6 @@ import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob;
 import org.thoughtcrime.securesms.jobs.CheckServiceReachabilityJob;
 import org.thoughtcrime.securesms.jobs.DownloadLatestEmojiDataJob;
 import org.thoughtcrime.securesms.jobs.EmojiSearchIndexDownloadJob;
-import org.thoughtcrime.securesms.jobs.FcmRefreshJob;
 import org.thoughtcrime.securesms.jobs.FontDownloaderJob;
 import org.thoughtcrime.securesms.jobs.GroupRingCleanupJob;
 import org.thoughtcrime.securesms.jobs.GroupV2UpdateSelfProfileKeyJob;
@@ -117,6 +114,7 @@ import org.thoughtcrime.securesms.ratelimit.RateLimitUtil;
 import org.thoughtcrime.securesms.recipients.Recipient;
 import org.thoughtcrime.securesms.registration.util.RegistrationUtil;
 import org.thoughtcrime.securesms.registration.local.LocalPinLockManager;
+import org.thoughtcrime.securesms.push.NtfyPushService;
 import org.thoughtcrime.securesms.registration.v2.AppContactSupportController;
 import org.thoughtcrime.securesms.registration.v2.AppRegistrationNetworkController;
 import org.thoughtcrime.securesms.registration.v2.AppRegistrationStorageController;
@@ -162,7 +160,7 @@ import rxdogtag2.RxDogTag;
  * Will be called once when the TextSecure process is created.
  * <p>
  * We're using this as an insertion point to patch up the Android PRNG disaster,
- * to initialize the job manager, and to check for GCM registration freshness.
+ * to initialize the job manager and start application services.
  *
  * @author Moxie Marlinspike
  */
@@ -228,7 +226,6 @@ public class ApplicationContext extends Application implements AppForegroundObse
               .addNonBlocking(this::initializeRevealableMessageManager)
               .addNonBlocking(this::initializePendingRetryReceiptManager)
               .addNonBlocking(this::initializeScheduledMessageManager)
-              .addNonBlocking(this::initializeFcmCheck)
               .addNonBlocking(this::recordProcessExits)
               .addNonBlocking(PreKeysSyncJob::enqueueIfNeeded)
               .addNonBlocking(this::initializePeriodicTasks)
@@ -291,7 +288,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
     AppDependencies.getMegaphoneRepository().onAppForegrounded();
     AppDependencies.getDeadlockDetector().start();
     InAppPaymentKeepAliveJob.enqueueAndTrackTimeIfNecessary();
-    FcmFetchManager.onForeground(this);
+    NtfyPushService.startIfConfigured(this);
     startAnrDetector();
 
     SignalExecutors.BOUNDED.execute(() -> {
@@ -498,42 +495,6 @@ public class ApplicationContext extends Application implements AppForegroundObse
   private void recordProcessExits() {
     if (Build.VERSION.SDK_INT >= 30) {
       ProcessExitReasonTracker.recordNewExits(this);
-    }
-  }
-
-  private void initializeFcmCheck() {
-    if (!SignalStore.account().isRegistered()) {
-      return;
-    }
-
-    PlayServicesUtil.PlayServicesStatus playServicesStatus = PlayServicesUtil.getPlayServicesStatus(this);
-
-    if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.SUCCESS && !SignalStore.account().isFcmEnabled()) {
-      Log.w(TAG, "Play Services are newly-available. Enabling FCM and updating server.");
-      SignalStore.account().setFcmEnabled(true);
-      AppDependencies.getJobManager().startChain(new FcmRefreshJob())
-                                      .then(new RefreshAttributesJob())
-                                      .enqueue();
-      AppDependencies.resetNetwork();
-      AppDependencies.startNetwork();
-      IncomingMessageObserver.stopForegroundService(this);
-    } else if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.MISSING && SignalStore.account().isFcmEnabled()) {
-      Log.w(TAG, "Play Services are no longer available. Attempting to get an FCM token anyway.");
-      AppDependencies.getJobManager().add(new FcmRefreshJob());
-    } else if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.MISSING && (System.currentTimeMillis() - SignalStore.misc().getLastMissingPlayServicesFcmVerificationTime()) > TimeUnit.DAYS.toMillis(3)) {
-      Log.i(TAG, "Play Services are unavailable, but it's been long enough that we should check and see if we can get an FCM token anyway.");
-      AppDependencies.getJobManager().add(new FcmRefreshJob());
-    } else if (SignalStore.account().isFcmEnabled()) {
-      long lastSetTime = SignalStore.account().getFcmTokenLastSetTime();
-      long nextSetTime = lastSetTime + TimeUnit.HOURS.toMillis(6);
-      long now         = System.currentTimeMillis();
-
-      if (SignalStore.account().getFcmToken() == null || nextSetTime <= now || lastSetTime > now) {
-        Log.i(TAG, "Time for routine FCM token refresh.");
-        AppDependencies.getJobManager().add(new FcmRefreshJob());
-      }
-    } else {
-      Log.d(TAG, "Play Services status: " + playServicesStatus + ", fcmEnabled: false. Skipping FCM check.");
     }
   }
 
