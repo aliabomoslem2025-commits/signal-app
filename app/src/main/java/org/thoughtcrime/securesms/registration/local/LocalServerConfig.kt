@@ -2,6 +2,7 @@ package org.thoughtcrime.securesms.registration.local
 
 import android.content.Context
 import org.json.JSONObject
+import org.webrtc.PeerConnection
 
 /**
  * Runtime configuration for the private Signal deployment.
@@ -39,6 +40,25 @@ class LocalServerConfig private constructor(
     val services = defaults.optJSONObject("services") ?: JSONObject()
     val value = services.optString(module)
     return if (module == "turn") normalizedTurnEndpoint(value) else normalizedEndpoint(value)
+  }
+
+  /**
+   * Optional static TURN override for isolated LANs. When credentials are omitted, the app
+   * continues to request short-lived TURN credentials from the configured Signal Calling API.
+   */
+  fun configuredTurnServers(): List<PeerConnection.IceServer> {
+    val services = defaults.optJSONObject("services") ?: JSONObject()
+    val url = services.optString("turn").takeIf { it.isNotBlank() } ?: return emptyList()
+    val username = services.optString("turnUsername").trim()
+    val credential = services.optString("turnCredential").trim()
+    if (username.isBlank() || credential.isBlank()) return emptyList()
+
+    return listOf(
+      PeerConnection.IceServer.builder(normalizedTurnEndpoint(url))
+        .setUsername(username)
+        .setPassword(credential)
+        .createIceServer()
+    )
   }
 
   fun saveEndpoint(module: String, value: String) {
@@ -92,6 +112,14 @@ class LocalServerConfig private constructor(
       if (value.isNotBlank()) normalizedEndpoint(value)
     }
     services.optString("turn").takeIf { it.isNotBlank() }?.let(::normalizedTurnEndpoint)
+    val turnUsername = services.optString("turnUsername").trim()
+    val turnCredential = services.optString("turnCredential").trim()
+    require(turnUsername.isBlank() == turnCredential.isBlank()) {
+      "A static TURN username and credential must be provided together"
+    }
+    if (turnUsername.isNotBlank()) {
+      normalizedTurnEndpoint(services.optString("turn"))
+    }
     defaults.keys().asSequence().toList().forEach(defaults::remove)
     parsed.keys().forEach { key -> defaults.put(key, parsed.get(key)) }
     persist()
