@@ -29,6 +29,7 @@ import org.thoughtcrime.securesms.registration.ntfy.PushChallengeRequest
 import java.io.IOException
 import java.security.SecureRandom
 import java.security.cert.CertificateFactory
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadLocalRandom
@@ -48,6 +49,12 @@ class NtfySubscriptionService : Service() {
     private const val NOTIFICATION_ID = NotificationIds.NTFY_SUBSCRIPTION
     private const val KEEP_ALIVE_TOKEN = "NtfyPushFetch"
     private const val MAX_BACKOFF_MS = 60_000L
+    @Volatile private var connected = false
+    private val connectedLatch = CountDownLatch(1)
+
+    fun awaitConnected(timeoutMs: Long): Boolean {
+      return connected || connectedLatch.await(timeoutMs, TimeUnit.MILLISECONDS)
+    }
 
     fun start(context: Context) {
       ContextCompat.startForegroundService(context, Intent(context, NtfySubscriptionService::class.java))
@@ -121,6 +128,8 @@ class NtfySubscriptionService : Service() {
           if (!response.isSuccessful) {
             throw IOException("ntfy returned HTTP ${response.code}")
           }
+          connected = true
+          connectedLatch.countDown()
           val source = response.body?.source() ?: throw IOException("ntfy returned an empty response body")
           backoff = 1_000L
           while (running) {
