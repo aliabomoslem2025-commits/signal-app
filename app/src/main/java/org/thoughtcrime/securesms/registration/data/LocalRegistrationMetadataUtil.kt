@@ -43,7 +43,7 @@ object LocalRegistrationMetadataUtil {
         masterKey = it
       }
       e164 = registrationData.e164
-      fcmEnabled = registrationData.isFcm
+      fcmEnabled = registrationData.isNtfy
       profileKey = registrationData.profileKey.serialize().toByteString()
       servicePassword = registrationData.password
       this.reglockEnabled = reglockEnabled
