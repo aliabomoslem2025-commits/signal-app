@@ -13,7 +13,6 @@ android {
   namespace = "org.signal.registration.sample"
 
   defaultConfig {
-    // IMPORTANT: We use the same package name as the signal staging app so that FCM works.
     applicationId = "org.thoughtcrime.securesms.staging"
     versionCode = 1
     versionName = "1.0"
@@ -102,12 +101,6 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   debugImplementation(libs.androidx.compose.ui.tooling.core)
 
-  // Firebase & Play Services
-  implementation(libs.firebase.messaging) {
-    exclude(group = "com.google.firebase", module = "firebase-core")
-    exclude(group = "com.google.firebase", module = "firebase-analytics")
-    exclude(group = "com.google.firebase", module = "firebase-measurement-connector")
-  }
   implementation(libs.google.play.services.base)
   implementation(libs.kotlinx.coroutines.play.services)
 }
