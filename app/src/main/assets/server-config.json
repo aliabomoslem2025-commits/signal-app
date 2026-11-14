@@ -14,8 +14,8 @@
     "svr2": "https://svr2.messenger.lan",
     "svrb": "https://svrb.messenger.lan",
     "attachments": "https://attachments.messenger.lan",
-    "sfu": "https://call.messenger.lan",
-    "ntfy": "https://push.messenger.lan"
+    "sfu": "https://call.lan",
+    "ntfy": "https://push.lan"
   },
   "security": {
     "requireHttps": true,
