@@ -170,10 +170,10 @@ class RegistrationRepository(
   }
 
   suspend fun createSession(e164: String): RequestResult<SessionMetadata, CreateSessionError> = withContext(Dispatchers.IO) {
-    val fcmToken = networkController.getFcmToken()
+    val ntfyTopic = networkController.getNtfyTopic()
     networkController.createSession(
       e164 = e164,
-      fcmToken = fcmToken,
+      ntfyTopic = ntfyTopic,
       mcc = null,
       mnc = null
     )
@@ -943,16 +943,16 @@ class RegistrationRepository(
       }
     }
 
-    val fcmToken = networkController.getFcmToken()
+    val ntfyTopic = networkController.getNtfyTopic()
 
     updateAccountData {
-      this.fetchesMessages = fcmToken == null
+      this.fetchesMessages = ntfyTopic == null
     }
 
     val encryptedDeviceName = DeviceNameCipher.encryptDeviceName(deviceName.toByteArray(StandardCharsets.UTF_8), aciIdentityKeyPair)
 
     val deviceAttributes = DeviceAttributes(
-      fetchesMessages = fcmToken == null,
+      fetchesMessages = ntfyTopic == null,
       registrationId = keyMaterial.aciRegistrationId,
       pniRegistrationId = keyMaterial.pni?.registrationId,
       name = Base64.encodeWithPadding(encryptedDeviceName),
@@ -980,7 +980,7 @@ class RegistrationRepository(
       deviceAttributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
+      ntfyTopic = ntfyTopic
     )
 
     if (result is RequestResult.Success) {
@@ -1208,10 +1208,10 @@ class RegistrationRepository(
       }
     }
 
-    val fcmToken = networkController.getFcmToken()
+    val ntfyTopic = networkController.getNtfyTopic()
 
     updateAccountData {
-      this.fetchesMessages = fcmToken == null
+      this.fetchesMessages = ntfyTopic == null
     }
 
     val newMasterKey = keyMaterial.accountEntropyPool.deriveMasterKey()
@@ -1234,7 +1234,7 @@ class RegistrationRepository(
       registrationId = keyMaterial.aciRegistrationId,
       voice = true,
       video = true,
-      fetchesMessages = fcmToken == null,
+      fetchesMessages = ntfyTopic == null,
       registrationLock = registrationLock,
       unidentifiedAccessKey = keyMaterial.unidentifiedAccessKey,
       unrestrictedUnidentifiedAccess = unrestrictedUnidentifiedAccess,
@@ -1261,7 +1261,7 @@ class RegistrationRepository(
       attributes = accountAttributes,
       aciPreKeys = keyMaterial.toAciPreKeyCollection(),
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
+      ntfyTopic = ntfyTopic,
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
