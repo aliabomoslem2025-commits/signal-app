@@ -70,7 +70,7 @@ object LocalAppPinManager {
     }
 
     val attempts = prefs.getInt(ATTEMPTS, 0) + 1
-    val lockMillis = if (attempts < 5) 0L else min(MAX_LOCK_MILLIS, 1_000L shl min(10, attempts - 5))
+    val lockMillis = if (attempts < 5) 0L else min(MAX_LOCK_MILLIS, 1_000L * (1L shl min(10, attempts - 5)))
     prefs.edit().putInt(ATTEMPTS, attempts)
       .putLong(LOCK_UNTIL, if (lockMillis == 0L) 0L else System.currentTimeMillis() + lockMillis)
       .apply()
