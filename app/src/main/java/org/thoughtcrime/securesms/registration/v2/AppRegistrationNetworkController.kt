@@ -90,7 +90,8 @@ import org.thoughtcrime.securesms.backup.v2.BackupRepository
 import org.thoughtcrime.securesms.backup.v2.RestoreTimestampResult
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
+import org.thoughtcrime.securesms.push.ntfy.NtfyTopicManager
+import org.thoughtcrime.securesms.push.ntfy.NtfySubscriptionService
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileContentUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileKeyUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceSyncRequestJob
@@ -105,7 +106,6 @@ import org.thoughtcrime.securesms.pin.SvrWrongPinException
 import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
 import org.thoughtcrime.securesms.recipients.Recipient
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
 import org.thoughtcrime.securesms.network.local.LocalServerConfigStore
 import org.thoughtcrime.securesms.registration.v2.localauth.LocalAuthSessionRegistry
 import org.thoughtcrime.securesms.registration.v2.localauth.LocalDeviceAuthClient
@@ -366,9 +366,13 @@ class AppRegistrationNetworkController(
 
   override suspend fun getFcmToken(): String? {
     return try {
-      FcmUtil.getToken(context).orElse(null)
+      val topic = NtfyTopicManager.getOrCreate(context)
+      if (!NtfySubscriptionService.awaitConnected(15_000L)) {
+        throw IOException("Unable to connect to the configured ntfy server")
+      }
+      topic
     } catch (e: Exception) {
-      Log.w(TAG, "Failed to get FCM token", e)
+      Log.w(TAG, "Failed to connect to the private ntfy service", e)
       null
     }
   }
