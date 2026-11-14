@@ -44,7 +44,7 @@ public final class LocalServerTrustStore implements TrustStore {
         return context.getResources().openRawResource(R.raw.whisper);
       }
 
-      final KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+      final KeyStore keyStore = KeyStore.getInstance("BKS");
       try (InputStream packagedTrustStore = context.getResources().openRawResource(R.raw.whisper)) {
         keyStore.load(packagedTrustStore, PASSWORD.toCharArray());
       }
