@@ -93,7 +93,7 @@ class AccountApiV2(private val authWebSocket: SignalWebSocket.AuthenticatedWebSo
    */
   suspend fun registerNtfyTopic(): RequestResult<String, Nothing> {
     return authWebSocket.requestResult(
-      request = WebSocketRequestMessage.put("/v1/accounts/ntfy"),
+      request = WebSocketRequestMessage.put("/v1/accounts/ntfy", "{}"),
       parseSuccess = { response ->
         SignalJson.decode(NtfyRegistrationResponse.serializer(), response.body).getOrNull()?.topic
           ?: throw IOException("Unparseable ntfy registration response")
