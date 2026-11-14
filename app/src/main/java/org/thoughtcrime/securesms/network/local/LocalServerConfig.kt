@@ -126,3 +126,10 @@ data class LocalServerConfig(
     }
   }
 }
+
+/** Stable facade shared by networking, registration, and the settings UI. */
+object LocalServerConfigStore {
+  fun load(context: Context): LocalServerConfig = LocalServerConfig.load(context)
+
+  fun save(context: Context, config: LocalServerConfig) = LocalServerConfig.save(context, config)
+}
