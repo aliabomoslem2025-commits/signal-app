@@ -1,25 +1,32 @@
 # Local LAN client integration status
 
-The `feature/local-lan-auth` branch contains the first Android client integration for the local device-authentication API.
+The `local-lan-auth` branch contains the Android-side integration for a privately managed Signal deployment.
 
-## Implemented in the branch
+## Implemented in this branch
 
-- `LocalDeviceKeyManager` creates a per-install P-256 signing key in Android Keystore and reads `Settings.Secure.ANDROID_ID`.
-- `AppRegistrationNetworkController` requests a LAN challenge, signs it, obtains the one-time compatibility code over HTTPS, and submits that code through the new local-auth API.
-- `VerificationCodeViewModel` treats the local-auth session as a distinct flow, avoids requesting SMS/voice transport, and inserts the returned code into the existing verification-code entry flow.
-- `LocalServerConfigStore` loads and validates the bundled `server-config.json` and provides persistence hooks for runtime configuration.
+- Each app installation creates a P-256 signing key in Android Keystore. The private key is non-exportable; `Settings.Secure.ANDROID_ID` is only an administrator-managed lookup value.
+- Before account registration, the phone-number screen exposes **Enroll device**. It exports the E.164 phone number, Android ID, device display name and X.509 public key as JSON for the administrator. The private key is never included.
+- `AppRegistrationNetworkController` uses `POST /v1/local-auth/challenge`, signs the returned nonce, calls `/verify`, retrieves the compatibility code over HTTPS and submits it to `/submit-code`.
+- The local code is consumed by the existing verification UI. The registration controller only accepts a local registration session after the code has been submitted successfully.
+- The legacy SMS Retriever receiver/listener has been removed from the local branch. The registration flow does not request SMS or voice delivery.
+- An optional application PIN is implemented separately from the Signal account/SVR PIN. Its verifier is HMAC-protected with an Android Keystore key and is checked locally.
+- `LocalNetworkSettingsActivity` allows the user/operator to edit, validate, copy and reset `server-config.json`; it also manages the optional PIN and exports enrollment information after registration.
+- The app's Signal service trust store can add administrator-supplied private LAN CA certificates from `trustedCaPem`. TLS validation remains enabled.
+- The app uses the configured LAN service/CDN/storage/CDSI/SVR2 addresses for the supported network configuration and no longer selects the public censorship-circumvention endpoints for some country codes.
 
-## Current limits that must be closed before production
+## Configuration
 
-- The public key must be pre-registered in the admin dashboard. The app branch does not yet expose a dedicated Settings screen to display/export the enrollment payload.
-- The config store has no user-facing Settings editor/import/export screen yet. The network layer loads the config when its dependency module is constructed, so changing a saved config requires recreating network dependencies or restarting the app.
-- The configured server endpoint trust chain must be trusted by Signal's configured trust store; the app does not yet provide certificate-CA enrollment/import.
-- The old SMS retriever implementation and its dependency remain in the source tree, even though the local registration route does not request SMS.
-- A separate app-specific PIN has not been implemented. Signal's existing screen lock delegates to the Android device credential; it is not a custom PIN owned by this app.
-- CDN/storage, calls, background delivery/push, and other remote dependencies still need LAN implementations and endpoint wiring.
+Edit `app/src/main/assets/server-config.json` or import its JSON content in Settings > Local network. Provide the private CA PEM in `trustedCaPem` when the deployment certificate chains to a private CA. Keep `allowCleartext=false`, `validateCertificates=true` and `smsEnabled=false`.
 
-## Runtime config
+The current endpoint model has fields for WebSocket, CDN, storage, CDSI, SVR2/SVRB, attachments, SFU and TURN. Not every module is yet dynamically routed from this JSON; in particular, the calling and some auxiliary service transports still require source-level wiring and infrastructure configuration. Restart the app after saving endpoint changes.
 
-Edit `app/src/main/assets/server-config.json` before building this branch to point to the LAN deployment. Do not put admin bearer tokens, private keys, or other secrets in this file. The current bundled values are examples and are not production endpoints.
+## Remaining production validation
 
-This branch is not yet a fully validated offline/LAN release. Build, registration, multi-device, messaging, attachment, background-delivery, and calling tests are still required.
+This branch has not yet passed a fresh Android CI build after the latest local-auth changes and has not been tested against a running private LAN deployment. Full production readiness still requires:
+- Android build, unit and instrumentation tests;
+- signed challenge, code submission and account creation against the deployed server;
+- two-device messaging, group, attachment and offline/foreground-delivery tests;
+- replacement or deliberate exclusion of FCM/APNs for an isolated network;
+- LAN media storage and calling infrastructure (SFU/TURN) if those features are required.
+
+Do not treat this branch as a verified fully-offline production release until the above integration tests pass.
