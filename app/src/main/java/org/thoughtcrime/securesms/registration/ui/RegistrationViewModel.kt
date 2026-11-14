@@ -224,23 +224,23 @@ class RegistrationViewModel : ViewModel() {
     }
   }
 
-  fun fetchFcmToken(context: Context) {
+  fun fetchNtfyTopic(context: Context) {
     viewModelScope.launch(context = coroutineExceptionHandler) {
-      val fcmToken = RegistrationRepository.getNtfyTopic(context)
+      val ntfyTopic = RegistrationRepository.getNtfyTopic(context)
       store.update {
-        it.copy(registrationCheckpoint = RegistrationCheckpoint.PUSH_NETWORK_AUDITED, isFcmSupported = true, fcmToken = fcmToken)
+        it.copy(registrationCheckpoint = RegistrationCheckpoint.PUSH_NETWORK_AUDITED, isNtfySupported = true, ntfyTopic = ntfyTopic)
       }
     }
   }
 
-  private suspend fun updateFcmToken(context: Context): String? {
-    Log.d(TAG, "Fetching FCM token…")
-    val fcmToken = RegistrationRepository.getFcmToken(context)
+  private suspend fun updateNtfyTopic(context: Context): String? {
+    Log.d(TAG, "Fetching ntfy topic…")
+    val ntfyTopic = RegistrationRepository.getNtfyTopic(context)
     store.update {
-      it.copy(fcmToken = fcmToken)
+      it.copy(ntfyTopic = ntfyTopic)
     }
-    Log.d(TAG, "FCM token fetched.", true)
-    return fcmToken
+    Log.d(TAG, "ntfy topic fetched.", true)
+    return ntfyTopic
   }
 
   fun togglePinKeyboardType() {
@@ -256,7 +256,7 @@ class RegistrationViewModel : ViewModel() {
         captchaToken = null,
         challengesRequested = emptyList(),
         challengeInProgress = false,
-        fcmToken = null
+        ntfyTopic = null
       )
     }
   }
@@ -376,7 +376,7 @@ class RegistrationViewModel : ViewModel() {
     var smsListenerReady = false
     Log.d(TAG, "Initializing SMS listener.")
     if (store.value.smsListenerTimeout < System.currentTimeMillis()) {
-      smsListenerReady = store.value.isFcmSupported && RegistrationRepository.registerSmsListener(context)
+      smsListenerReady = store.value.isNtfySupported && RegistrationRepository.registerSmsListener(context)
 
       if (smsListenerReady) {
         val smsRetrieverTimeout = System.currentTimeMillis() + 5.minutes.inWholeMilliseconds
@@ -522,7 +522,7 @@ class RegistrationViewModel : ViewModel() {
 
       is Success -> {
         Log.d(TAG, "New registration session status received.")
-        updateFcmToken(context)
+        updateNtfyTopic(context)
         store.update {
           it.copy(
             sessionId = sessionResult.sessionId,
@@ -742,7 +742,7 @@ class RegistrationViewModel : ViewModel() {
 
   private suspend fun verifyReRegisterInternal(context: Context, pin: String?, masterKey: MasterKey) {
     Log.v(TAG, "verifyReRegisterInternal(hasPin=${pin != null})")
-    updateFcmToken(context)
+    updateNtfyTopic(context)
 
     val registrationData = getRegistrationData()
 
@@ -1061,7 +1061,7 @@ class RegistrationViewModel : ViewModel() {
     val code = currentState.enteredCode
     val e164: String = currentState.phoneNumber?.toE164() ?: throw IllegalStateException("Can't construct registration data without E164!")
     val recoveryPassword = if (currentState.sessionId == null && hasRecoveryPassword()) store.value.recoveryPassword!! else null
-    return RegistrationData(code, e164, password, RegistrationRepository.getRegistrationId(), RegistrationRepository.getProfileKey(e164), currentState.fcmToken, RegistrationRepository.getPniRegistrationId(), recoveryPassword)
+    return RegistrationData(code, e164, password, RegistrationRepository.getRegistrationId(), RegistrationRepository.getProfileKey(e164), currentState.ntfyTopic, RegistrationRepository.getPniRegistrationId(), recoveryPassword)
   }
 
   /**
@@ -1124,7 +1124,7 @@ class RegistrationViewModel : ViewModel() {
 
     val profileKey = ProfileKey(message.profileKey!!.toByteArray())
     val serverAuthToken = Util.getSecret(18)
-    val fcmToken = RegistrationRepository.getFcmToken(context)
+    val ntfyTopic = RegistrationRepository.getNtfyTopic(context)
 
     val registrationData = RegistrationData(
       code = "",
@@ -1132,7 +1132,7 @@ class RegistrationViewModel : ViewModel() {
       password = serverAuthToken,
       registrationId = RegistrationRepository.getRegistrationId(),
       profileKey = profileKey,
-      ntfyTopic = fcmToken,
+      ntfyTopic = ntfyTopic,
       pniRegistrationId = RegistrationRepository.getPniRegistrationId(),
       recoveryPassword = null
     )
