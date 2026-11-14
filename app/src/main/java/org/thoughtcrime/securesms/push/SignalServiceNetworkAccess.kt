@@ -144,7 +144,7 @@ class SignalServiceNetworkAccess(context: Context) {
     private val MAYBE_CENSORED_DIRECT_FAILURE_COOLDOWN = 5.minutes
   }
 
-  private val serviceTrustStore: TrustStore = SignalServiceTrustStore(context)
+  private val serviceTrustStore: TrustStore = LocalServerTrustStore(context)
   private val localServerConfig = LocalServerConfigStore.load(context)
   private val gTrustStore: TrustStore = DomainFrontingTrustStore(context)
   private val fTrustStore: TrustStore = DomainFrontingDigicertTrustStore(context)
