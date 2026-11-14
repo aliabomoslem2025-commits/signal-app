@@ -309,7 +309,7 @@ public class PushServiceSocket {
     }
   }
 
-  public VerifyAccountResponse submitRegistrationRequest(@Nullable String sessionId, @Nullable String recoveryPassword, AccountAttributes attributes, PreKeyCollection aciPreKeys, PreKeyCollection pniPreKeys, @Nullable String fcmToken, boolean skipDeviceTransfer) throws IOException {
+  public VerifyAccountResponse submitRegistrationRequest(@Nullable String sessionId, @Nullable String recoveryPassword, AccountAttributes attributes, PreKeyCollection aciPreKeys, PreKeyCollection pniPreKeys, @Nullable String ntfyTopic, boolean skipDeviceTransfer) throws IOException {
     String path = REGISTRATION_PATH;
     if (sessionId == null && recoveryPassword == null) {
       throw new IllegalArgumentException("Neither Session ID nor Recovery Password provided.");
@@ -319,11 +319,11 @@ public class PushServiceSocket {
       throw new IllegalArgumentException("You must supply one and only one of either: Session ID, or Recovery Password.");
     }
 
-    GcmRegistrationId gcmRegistrationId;
+    NtfyTopicRegistration ntfyTopicRegistration;
     if (attributes.getFetchesMessages()) {
       gcmRegistrationId = null;
     } else {
-      gcmRegistrationId = new GcmRegistrationId(fcmToken, true);
+      gcmRegistrationId = new NtfyTopicRegistration(fcmToken, true);
     }
 
     RegistrationSessionRequestBody body;
