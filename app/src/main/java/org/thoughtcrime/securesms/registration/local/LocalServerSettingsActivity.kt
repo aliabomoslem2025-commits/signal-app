@@ -61,6 +61,7 @@ private fun LocalServerSettingsScreen(
 ) {
   val context = LocalContext.current
   var json by rememberSaveable { mutableStateOf(initialConfig.exportJson()) }
+  var ntfyReaderToken by rememberSaveable { mutableStateOf(initialConfig.ntfyReaderToken) }
   var error by rememberSaveable { mutableStateOf<String?>(null) }
   var currentPin by rememberSaveable { mutableStateOf("") }
   var pin by rememberSaveable { mutableStateOf("") }
@@ -125,6 +126,35 @@ private fun LocalServerSettingsScreen(
         modifier = Modifier.fillMaxWidth()
       ) {
         Text("Validate and save configuration")
+      }
+
+      Text("ntfy push notifications", style = MaterialTheme.typography.titleMedium)
+      Text(
+        "Configure services.ntfy in server-config.json with your HTTPS ntfy URL, then paste the device read-only token here. This credential remains on this device and is excluded from exported configuration.",
+        style = MaterialTheme.typography.bodyMedium
+      )
+      OutlinedTextField(
+        value = ntfyReaderToken,
+        onValueChange = { ntfyReaderToken = it.trim() },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("ntfy read-only token") },
+        singleLine = true,
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+      )
+      Button(
+        onClick = {
+          try {
+            initialConfig.saveNtfyReaderToken(ntfyReaderToken)
+            error = null
+            Toast.makeText(context, "ntfy reader credential saved on this device", Toast.LENGTH_LONG).show()
+          } catch (e: Exception) {
+            error = e.message ?: "Could not save ntfy credential"
+          }
+        },
+        enabled = ntfyReaderToken.isNotBlank(),
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Text("Save ntfy reader credential")
       }
 
       Text("Local application PIN", style = MaterialTheme.typography.titleMedium)
