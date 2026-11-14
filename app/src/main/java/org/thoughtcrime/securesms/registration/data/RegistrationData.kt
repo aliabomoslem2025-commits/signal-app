@@ -8,10 +8,10 @@ data class RegistrationData(
   val password: String,
   val registrationId: Int,
   val profileKey: ProfileKey,
-  val fcmToken: String?,
+  val ntfyTopic: String?,
   val pniRegistrationId: Int,
   val recoveryPassword: String?
 ) {
-  val isNotFcm: Boolean = fcmToken.isNullOrBlank()
-  val isFcm: Boolean = !isNotFcm
+  val isNotNtfy: Boolean = ntfyTopic.isNullOrBlank()
+  val isNtfy: Boolean = !isNotNtfy
 }
