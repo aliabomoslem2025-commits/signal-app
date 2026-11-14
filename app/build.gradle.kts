@@ -2,8 +2,6 @@
 
 import com.android.build.api.artifact.ArtifactTransformationRequest
 import com.android.build.api.artifact.SingleArtifact
-import com.android.build.api.variant.BuiltArtifactsLoader
-import com.android.build.api.variant.HasAndroidTest
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
