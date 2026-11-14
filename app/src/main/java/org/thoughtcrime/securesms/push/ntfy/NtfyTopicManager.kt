@@ -14,6 +14,7 @@ object NtfyTopicManager {
   private val secureRandom = SecureRandom()
 
   @Synchronized
+  @JvmStatic
   fun getOrCreate(context: Context): String {
     val existing = SignalStore.account.ntfyTopic
     if (!existing.isNullOrBlank()) {
@@ -30,7 +31,6 @@ object NtfyTopicManager {
     secureRandom.nextBytes(random)
     val topic = "signal-" + Base64.encodeUrlSafeWithoutPadding(random)
     SignalStore.account.ntfyTopic = topic
-    SignalStore.account.ntfyEnabled = true
     NtfySubscriptionService.start(context)
     return topic
   }
