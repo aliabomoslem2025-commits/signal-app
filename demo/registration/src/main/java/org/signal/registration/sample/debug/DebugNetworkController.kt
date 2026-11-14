@@ -79,7 +79,6 @@ class DebugNetworkController(
 
   override suspend fun createSession(
     e164: String,
-    fcmToken: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
@@ -87,7 +86,7 @@ class DebugNetworkController(
       Log.d(TAG, "[createSession] Returning debug override")
       return it
     }
-    return delegate.createSession(e164, fcmToken, mcc, mnc)
+    return delegate.createSession(e164, mcc, mnc)
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
@@ -100,14 +99,13 @@ class DebugNetworkController(
 
   override suspend fun updateSession(
     sessionId: String,
-    pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
     NetworkDebugState.getOverride<RequestResult<SessionMetadata, UpdateSessionError>>("updateSession")?.let {
       Log.d(TAG, "[updateSession] Returning debug override")
       return it
     }
-    return delegate.updateSession(sessionId, pushChallengeToken, captchaToken)
+    return delegate.updateSession(sessionId, captchaToken)
   }
 
   override suspend fun requestVerificationCode(
@@ -332,9 +330,8 @@ class DebugNetworkController(
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
-    return delegate.registerAsLinkedDevice(aci, password, provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys, fcmToken)
+    return delegate.registerAsLinkedDevice(aci, password, provisioningCode, deviceAttributes, aciPreKeys, pniPreKeys)
   }
 
   override suspend fun onLinkedDeviceRegistered() {
