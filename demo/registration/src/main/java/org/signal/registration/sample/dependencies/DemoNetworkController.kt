@@ -92,8 +92,6 @@ import org.signal.registration.NetworkController.ProvisioningMessage
 import org.signal.registration.ReceiptCredentialResult
 import org.signal.registration.proto.RegistrationProvisionMessage
 import org.signal.registration.sample.MainActivity
-import org.signal.registration.sample.fcm.FcmUtil
-import org.signal.registration.sample.fcm.PushChallengeReceiver
 import org.signal.registration.sample.storage.RegistrationPreferences
 import org.whispersystems.signalservice.api.link.TransferArchiveResponse
 import org.whispersystems.signalservice.api.provisioning.ProvisioningSocket
@@ -177,7 +175,6 @@ class DemoNetworkController(
 
   override suspend fun createSession(
     e164: String,
-    fcmToken: String?,
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
@@ -240,7 +237,6 @@ class DemoNetworkController(
       attributes = attributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
@@ -291,24 +287,6 @@ class DemoNetworkController(
     } catch (e: VerificationFailedException) {
       Log.w(TAG, "Could not verify the receipt credential while building its presentation.", e)
       ReceiptCredentialResult.VerificationFailed
-    }
-  }
-
-  override suspend fun getFcmToken(): String? {
-    return try {
-      FcmUtil.getToken(context)
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to get FCM token", e)
-      null
-    }
-  }
-
-  override suspend fun awaitPushChallengeToken(): String? {
-    return try {
-      PushChallengeReceiver.awaitChallenge()
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to await push challenge token", e)
-      null
     }
   }
 
@@ -420,7 +398,6 @@ class DemoNetworkController(
     deviceAttributes: DeviceAttributes,
     aciPreKeys: PreKeyCollection,
     pniPreKeys: PreKeyCollection?,
-    fcmToken: String?
   ): RequestResult<LinkDeviceResponse, RegisterAsLinkedDeviceError> {
     return registrationApi.registerAsSecondaryDevice(
       aci = aci,
@@ -429,7 +406,6 @@ class DemoNetworkController(
       attributes = deviceAttributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken
     )
   }
 
