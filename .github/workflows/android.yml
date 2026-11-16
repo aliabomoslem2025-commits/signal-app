@@ -6,12 +6,13 @@ on:
     branches:
     - 'main'
     - '8.**'
-    - 'feat/lan-device-auth-ntfy-rebuild'
   workflow_dispatch:
 
+# Avoid concurrent full Gradle builds for every intermediate LAN repair commit.
+# In-progress work for the same branch/PR is superseded by its newest head.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read # to fetch code (actions/checkout)

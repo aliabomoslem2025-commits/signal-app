@@ -40,8 +40,32 @@ class SignalServiceNetworkAccess(context: Context) {
 
   private val endpoints: LocalServerConfig = LocalServerConfig.load(context)
   private val lanTrust: TrustStore = LocalServerTrustStore(context)
+  private val destinationPolicy = LanDestinationPolicy(
+    listOf(
+      endpoints.signalApiUrl,
+      endpoints.localAuthApiUrl,
+      endpoints.ntfyBaseUrl,
+      endpoints.cdn0Url,
+      endpoints.cdn2Url,
+      endpoints.cdn3Url,
+      endpoints.storageUrl,
+      endpoints.cdsiUrl,
+      endpoints.svr2Url,
+      endpoints.callingSfuUrl,
+      endpoints.tusUrl
+    )
+  )
 
   private val networkInterceptors: List<Interceptor> = listOf(
+    Interceptor { chain ->
+      val request = chain.request()
+      val url = request.url
+      if (!destinationPolicy.permits(url.scheme, url.host, url.port)) {
+        Log.w(TAG, "Rejected HTTP request to a destination not configured for LAN transport")
+        throw IOException("Network destination is not an approved HTTPS LAN endpoint")
+      }
+      chain.proceed(request)
+    },
     StandardUserAgentInterceptor(),
     StorageServiceSizeLoggingInterceptor(),
     RemoteDeprecationDetectorInterceptor(this::getConfiguration),

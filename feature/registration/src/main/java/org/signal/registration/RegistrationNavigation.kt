@@ -45,6 +45,7 @@ import com.google.accompanist.permissions.MultiplePermissionsState
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.common.GoogleApiAvailability
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.TypeParceler
@@ -707,7 +708,7 @@ private fun EntryProviderScope<NavKey>.navigationEntries(
         repository = registrationRepository,
         parentState = registrationViewModel.state,
         parentEventEmitter = registrationViewModel::onEvent,
-        smsCodeEvents = VerificationCodeViewModel.smsCodeFlow(context)
+        smsCodeEvents = if (registrationRepository.isLocalAuthEnabled()) emptyFlow() else VerificationCodeViewModel.smsCodeFlow(context)
       )
     }
     val state by viewModel.state.collectAsStateWithLifecycle()

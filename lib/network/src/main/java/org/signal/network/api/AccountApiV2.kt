@@ -90,7 +90,8 @@ class AccountApiV2(private val authWebSocket: SignalWebSocket.AuthenticatedWebSo
     return authWebSocket.requestResult(
       request = WebSocketRequestMessage.put("/v1/accounts/ntfy", ByteArray(0)),
       parseSuccess = { response ->
-        val value = org.json.JSONObject(String(response.body, Charsets.UTF_8)).getString("topic")
+        val value = SignalJson.decode(NtfyTopicResponse.serializer(), response.body).getOrNull()?.topic
+          ?: throw IOException("Unparseable ntfy topic registration response")
         require(Regex("^signal-[A-Za-z0-9_-]{32,64}$").matches(value)) { "Invalid ntfy topic format" }
         value
       },
@@ -711,3 +712,6 @@ class AccountApiV2(private val authWebSocket: SignalWebSocket.AuthenticatedWebSo
     data class RateLimited(val retryAfter: Duration?) : ConfirmUsernameError
   }
 }
+
+@Serializable
+private data class NtfyTopicResponse(val topic: String)

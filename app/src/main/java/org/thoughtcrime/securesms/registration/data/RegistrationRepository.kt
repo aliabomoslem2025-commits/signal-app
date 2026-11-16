@@ -9,13 +9,10 @@ import android.app.backup.BackupManager
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
-import com.google.android.gms.auth.api.phone.SmsRetriever
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.signal.core.models.AccountEntropyPool
 import org.signal.core.models.MasterKey
 import org.signal.core.models.ServiceId
@@ -641,31 +638,12 @@ object RegistrationRepository {
   }
 
   /**
-   * Starts an SMS listener to auto-enter a verification code.
-   *
-   * The listener [lives for 5 minutes](https://developers.google.com/android/reference/com/google/android/gms/auth/api/phone/SmsRetrieverApi).
-   *
-   * @return whether or not the Play Services SMS Listener was successfully registered.
+   * SMS and the Google Play Services SMS retriever are not valid verification
+   * transports for this LAN-only fork, including the legacy change-number UI.
+   * The server requires an administrator-approved Keystore device proof.
    */
-  suspend fun registerSmsListener(context: Context): Boolean {
-    Log.d(TAG, "Attempting to start verification code SMS retriever.")
-    val started = withTimeoutOrNull(5.seconds.inWholeMilliseconds) {
-      try {
-        SmsRetriever.getClient(context).startSmsRetriever().await()
-        Log.d(TAG, "Successfully started verification code SMS retriever.")
-        return@withTimeoutOrNull true
-      } catch (ex: Exception) {
-        Log.w(TAG, "Could not start verification code SMS retriever due to exception.", ex)
-        return@withTimeoutOrNull false
-      }
-    }
-
-    if (started == null) {
-      Log.w(TAG, "Could not start verification code SMS retriever due to timeout.")
-    }
-
-    return started == true
-  }
+  @Suppress("UNUSED_PARAMETER")
+  suspend fun registerSmsListener(context: Context): Boolean = false
 
   @VisibleForTesting
   fun generateSignedAndLastResortPreKeys(identity: IdentityKeyPair, metadataStore: PreKeyMetadataStore): PreKeyCollection {
