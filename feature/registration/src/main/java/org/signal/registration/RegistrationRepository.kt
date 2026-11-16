@@ -169,8 +169,10 @@ class RegistrationRepository(
     internal const val SIGNAL_LOGIN_PURCHASE_OPTION_ID = "nonumber"
   }
 
+  fun isLocalAuthEnabled(): Boolean = networkController.isLocalAuthEnabled()
+
   suspend fun createSession(e164: String): RequestResult<SessionMetadata, CreateSessionError> = withContext(Dispatchers.IO) {
-    val fcmToken = networkController.getFcmToken()
+    val fcmToken = if (isLocalAuthEnabled()) null else networkController.getFcmToken()
     networkController.createSession(
       e164 = e164,
       fcmToken = fcmToken,
@@ -203,6 +205,7 @@ class RegistrationRepository(
    */
   suspend fun registerSmsListener(): Boolean {
     Log.d(TAG, "Attempting to start verification code SMS retriever.")
+    if (isLocalAuthEnabled()) return false
     val started = withTimeoutOrNull(5.seconds.inWholeMilliseconds) {
       try {
         SmsRetriever.getClient(context).startSmsRetriever().await()
