@@ -38,6 +38,7 @@ import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
 import org.signal.registration.LocalAuthCodeBus
+import org.signal.registration.LanPasswordInvalidException
 import org.signal.registration.RegistrationRoute
 import org.signal.registration.screens.util.navigateBack
 import org.signal.registration.screens.util.navigateTo
@@ -140,7 +141,7 @@ class VerificationCodeViewModel(
       LocalAuthCodeBus.events.collect { item ->
         if (repository.isLocalAuthEnabled() && parentState.value.sessionMetadata?.id == item.sessionId) {
           LocalAuthCodeBus.consume(item.sessionId, item.value)
-          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(item.value))
+          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(item.value, item.passwordSetupRequired))
         }
       }
     }
@@ -157,7 +158,10 @@ class VerificationCodeViewModel(
       is VerificationCodeScreenEvents.CodeEntered -> applyCodeEntered(state, event.code, stateEmitter)
       is VerificationCodeScreenEvents.CodeEntryEvent -> state.also { codeEntryPresenter.onEvent(event.event) }
       is VerificationCodeScreenEvents.CodeEntryStateChanged -> state.copy(codeEntry = event.codeEntryState)
-      is VerificationCodeScreenEvents.CodeAutoFilled -> applyCodeAutoFilled(state, event.code)
+      is VerificationCodeScreenEvents.CodeAutoFilled -> applyCodeAutoFilled(state.copy(localPasswordSetupRequired = event.passwordSetupRequired), event.code)
+      is VerificationCodeScreenEvents.LocalPasswordSubmitted -> submitLocalPassword(state, event, stateEmitter)
+      is VerificationCodeScreenEvents.LocalPasswordCancelled -> state.copy(pendingLocalCode = null).also { codeEntryPresenter.onEvent(CodeEntryFieldEvents.Clear) }
+      is VerificationCodeScreenEvents.LocalPasswordErrorDismissed -> state.copy(snackbars = state.snackbars.copy(localPasswordInvalid = false))
       is VerificationCodeScreenEvents.WrongNumber -> state.also { parentEventEmitter.navigateTo(RegistrationRoute.PhoneNumberEntry) }
       is VerificationCodeScreenEvents.ResendSms -> applyResendCode(state, VerificationCodeTransport.SMS)
       is VerificationCodeScreenEvents.CallMe -> applyResendCode(state, VerificationCodeTransport.VOICE)
@@ -216,6 +220,7 @@ class VerificationCodeViewModel(
     return state.copy(
       sessionMetadata = parentState.sessionMetadata,
       e164 = parentState.sessionE164,
+      localAuth = repository.isLocalAuthEnabled(),
       rateLimits = rateLimits
     )
   }
@@ -233,11 +238,14 @@ class VerificationCodeViewModel(
   }
 
   private suspend fun applyCodeEntered(state: VerificationCodeState, code: String, stateEmitter: (VerificationCodeState) -> Unit): VerificationCodeState {
-    if (state.isSubmittingCode) {
-      Log.w(TAG, "[CodeEntered] Already submitting a code. Ignoring.")
+    if (state.isSubmittingCode || state.pendingLocalCode != null) {
+      Log.w(TAG, "[CodeEntered] A code is already pending authentication. Ignoring.")
       return state
     }
 
+    // The code is auto-filled, but no LAN ticket can be issued before the
+    // user enters their separate password (and creates one on first login).
+    if (state.localAuth) return state.copy(pendingLocalCode = code)
     return submitCode(state, code, stateEmitter)
   }
 
@@ -268,7 +276,33 @@ class VerificationCodeViewModel(
     return performSubmission(state, code).copy(isSubmittingCode = false)
   }
 
-  private suspend fun performSubmission(inputState: VerificationCodeState, code: String): VerificationCodeState {
+  private suspend fun submitLocalPassword(
+    state: VerificationCodeState,
+    event: VerificationCodeScreenEvents.LocalPasswordSubmitted,
+    stateEmitter: (VerificationCodeState) -> Unit
+  ): VerificationCodeState {
+    val code = state.pendingLocalCode ?: return state
+    if (!state.localAuth || state.isSubmittingCode) return state
+    // Also checked authoritatively on the local-auth server.
+    if (state.localPasswordSetupRequired &&
+        (event.password != event.confirmation || event.password.length < 12)) return state
+    stateEmitter(state.copy(isSubmittingCode = true, pendingLocalCode = null))
+    val result = performSubmission(state.copy(pendingLocalCode = null), code, event.password, event.confirmation)
+    return if (result.sessionMetadata?.verified == true) {
+      result.copy(isSubmittingCode = false)
+    } else {
+      // Keep the code only in the in-memory view model so the user can retry
+      // a failed password without asking for another activation code.
+      result.copy(isSubmittingCode = false, pendingLocalCode = code)
+    }
+  }
+
+  private suspend fun performSubmission(
+    inputState: VerificationCodeState,
+    code: String,
+    localPassword: String? = null,
+    localPasswordConfirmation: String = ""
+  ): VerificationCodeState {
     var state = inputState
     var sessionMetadata = state.sessionMetadata ?: return state.also {
       parentEventEmitter(RegistrationFlowEvent.ResetState)
@@ -276,7 +310,12 @@ class VerificationCodeViewModel(
 
     // TODO should we be checking on whether we need to do more captcha stuff?
 
-    val result = repository.submitVerificationCode(sessionMetadata.id, code)
+    val result = if (repository.isLocalAuthEnabled()) {
+      if (localPassword == null) return state.copy(snackbars = state.snackbars.copy(unknownError = true))
+      repository.submitLocalVerificationCode(sessionMetadata.id, code, localPassword, localPasswordConfirmation)
+    } else {
+      repository.submitVerificationCode(sessionMetadata.id, code)
+    }
 
     sessionMetadata = when (result) {
       is RequestResult.Success -> {
@@ -316,6 +355,9 @@ class VerificationCodeViewModel(
         return state.copy(snackbars = state.snackbars.copy(networkError = true))
       }
       is RequestResult.ApplicationError -> {
+        if (result.cause is LanPasswordInvalidException) {
+          return state.copy(snackbars = state.snackbars.copy(localPasswordInvalid = true))
+        }
         Log.w(TAG, "[SubmitCode] Unknown error when submitting verification code.", result.cause)
         return state.copy(snackbars = state.snackbars.copy(unknownError = true))
       }

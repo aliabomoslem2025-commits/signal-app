@@ -5,6 +5,7 @@ import android.util.Base64
 import org.json.JSONObject
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.registration.LanDeviceNotAuthorizedException
+import org.signal.registration.LanPasswordInvalidException
 import org.signal.registration.LocalAuthCodeBus
 import org.thoughtcrime.securesms.push.LocalServerTrustStore
 import java.net.HttpURLConnection
@@ -66,11 +67,12 @@ class LocalDeviceAuthClient(context: Context) {
     )
     val code = response.getString("verificationCode")
     require(code.length == 6 && code.all { it in '0'..'9' }) { "Invalid LAN activation response" }
-    LocalAuthCodeBus.publish(id, code)
+    require(response.has("passwordSetupRequired")) { "LAN server does not enforce password setup" }
+    LocalAuthCodeBus.publish(id, code, response.getBoolean("passwordSetupRequired"))
     metadata(id, allowed = false, verified = false)
   }
 
-  suspend fun complete(id: String, code: String): SessionMetadata = withContext(Dispatchers.IO) {
+  suspend fun complete(id: String, code: String, password: String, passwordConfirmation: String): SessionMetadata = withContext(Dispatchers.IO) {
     val state = decodeChallenge(id)
     val challengeId = state.getString("challengeId")
     val signature = enrollmentKey.signCompletion(
@@ -79,6 +81,7 @@ class LocalDeviceAuthClient(context: Context) {
     val response = post(
       "/v1/local-auth/complete",
       JSONObject().put("challengeId", challengeId).put("code", code).put("signature", signature)
+        .put("password", password).put("passwordConfirmation", passwordConfirmation)
     )
     val ticketId = response.getString("sessionId")
     require(isCompletedSession(ticketId)) { "Local authorization returned an invalid signed session" }
@@ -138,6 +141,9 @@ class LocalDeviceAuthClient(context: Context) {
       val stream = if (status in 200..299) connection.inputStream else connection.errorStream
       val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
       val parsed = if (response.isBlank()) JSONObject() else JSONObject(response)
+      if (path == "/v1/local-auth/complete" && status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+        throw LanPasswordInvalidException()
+      }
       if (status == HttpURLConnection.HTTP_UNAUTHORIZED || status == HttpURLConnection.HTTP_FORBIDDEN) {
         throw LanDeviceNotAuthorizedException()
       }

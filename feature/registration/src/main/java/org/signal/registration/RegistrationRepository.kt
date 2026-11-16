@@ -262,6 +262,16 @@ class RegistrationRepository(
     )
   }
 
+  suspend fun submitLocalVerificationCode(
+    sessionId: String,
+    verificationCode: String,
+    password: String,
+    passwordConfirmation: String
+  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> = withContext(Dispatchers.IO) {
+    check(isLocalAuthEnabled()) { "Password submission is reserved for the LAN authentication server" }
+    networkController.submitLocalVerificationCode(sessionId, verificationCode, password, passwordConfirmation)
+  }
+
   suspend fun getSvrCredentials(): RequestResult<SvrCredentials, NetworkController.GetSvrCredentialsError> = withContext(Dispatchers.IO) {
     networkController.getSvrCredentials().also {
       if (it is RequestResult.Success) {

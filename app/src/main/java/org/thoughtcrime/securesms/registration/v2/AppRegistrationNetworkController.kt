@@ -206,10 +206,18 @@ class AppRegistrationNetworkController(
   override suspend fun submitVerificationCode(
     sessionId: String,
     verificationCode: String
+  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> =
+    RequestResult.ApplicationError(SecurityException("LAN user password is required"))
+
+  override suspend fun submitLocalVerificationCode(
+    sessionId: String,
+    verificationCode: String,
+    password: String,
+    passwordConfirmation: String
   ): RequestResult<SessionMetadata, SubmitVerificationCodeError> {
     if (!localAuth.isChallengeSession(sessionId)) return RequestResult.ApplicationError(SecurityException("Invalid LAN challenge"))
     return try {
-      RequestResult.Success(localAuth.complete(sessionId, verificationCode))
+      RequestResult.Success(localAuth.complete(sessionId, verificationCode, password, passwordConfirmation))
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {

@@ -103,6 +103,19 @@ interface NetworkController {
   suspend fun submitVerificationCode(sessionId: String, verificationCode: String): RequestResult<SessionMetadata, SubmitVerificationCodeError>
 
   /**
+   * LAN-only: the device proof and auto-filled activation code must be paired
+   * with the password chosen by the user before registration can proceed.
+   * No upstream transport may silently ignore the second factor.
+   */
+  suspend fun submitLocalVerificationCode(
+    sessionId: String,
+    verificationCode: String,
+    password: String,
+    passwordConfirmation: String
+  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> =
+    RequestResult.ApplicationError(SecurityException("LAN password verification not implemented"))
+
+  /**
    * Officially register an account.
    * Must provide exactly one of [sessionId], [recoveryPassword], or [receiptCredentialPresentation].
    *

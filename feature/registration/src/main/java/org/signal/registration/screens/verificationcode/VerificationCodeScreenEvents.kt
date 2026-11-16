@@ -27,9 +27,17 @@ sealed class VerificationCodeScreenEvents {
   /**
    * A verification code was automatically retrieved from an incoming SMS via the Play Services SMS retriever.
    */
-  data class CodeAutoFilled(val code: String) : VerificationCodeScreenEvents() {
+  data class CodeAutoFilled(val code: String, val passwordSetupRequired: Boolean = true) : VerificationCodeScreenEvents() {
     override fun toString(): String = "CodeAutoFilled(code=${code.censor()})"
   }
+
+  /** Password is never included in logging or a persisted registration flow event. */
+  data class LocalPasswordSubmitted(val password: String, val confirmation: String) : VerificationCodeScreenEvents() {
+    override fun toString(): String = "LocalPasswordSubmitted(redacted)"
+  }
+
+  data object LocalPasswordCancelled : VerificationCodeScreenEvents()
+  data object LocalPasswordErrorDismissed : VerificationCodeScreenEvents()
 
   data object WrongNumber : VerificationCodeScreenEvents()
 
