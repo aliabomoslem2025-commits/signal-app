@@ -37,6 +37,7 @@ import org.signal.registration.PendingRestoreOption
 import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
+import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.RegistrationRoute
 import org.signal.registration.screens.util.navigateBack
 import org.signal.registration.screens.util.navigateTo
@@ -130,7 +131,17 @@ class VerificationCodeViewModel(
 
     viewModelScope.launch {
       smsCodeEvents.collect { code ->
-        onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+        if (!repository.isLocalAuthEnabled()) {
+          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(code))
+        }
+      }
+    }
+    viewModelScope.launch {
+      LocalAuthCodeBus.events.collect { item ->
+        if (repository.isLocalAuthEnabled() && parentState.value.sessionMetadata?.id == item.sessionId) {
+          LocalAuthCodeBus.consume(item.sessionId, item.value)
+          onEvent(VerificationCodeScreenEvents.CodeAutoFilled(item.value))
+        }
       }
     }
   }
