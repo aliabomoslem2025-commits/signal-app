@@ -36,6 +36,7 @@ import org.signal.libsignal.zkgroup.receipts.ReceiptCredentialResponse
 import org.signal.libsignal.zkgroup.receipts.ReceiptSerial
 import org.signal.network.NetworkResult
 import org.signal.network.api.ArchiveApiV2
+import org.thoughtcrime.securesms.push.NtfyPushService
 import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.signal.network.api.RegistrationApiV2
 import org.signal.network.api.RegistrationApiV2.AccountAttributes
@@ -237,7 +238,7 @@ class AppRegistrationNetworkController(
         !recoveryPassword.isNullOrBlank() || receiptCredentialPresentation != null || aci != null) {
       return RequestResult.ApplicationError(SecurityException("Only an administrator-enrolled handset can register"))
     }
-    return registrationApi.registerAccount(
+    val result = registrationApi.registerAccount(
       e164 = e164,
       password = password,
       sessionId = sessionId,
@@ -252,6 +253,12 @@ class AppRegistrationNetworkController(
       totp = totp,
       webAuthnResponse = webAuthnResponse
     )
+    if (result is RequestResult.Success) {
+      // Login succeeds only with a consumed server-issued LAN device ticket.
+      // Start ntfy now; it retries until the persisted account is registered.
+      NtfyPushService.start(context)
+    }
+    return result
   }
 
   override suspend fun getLoginConfiguration(): RequestResult<LoginConfiguration, GetLoginConfigurationError> {
