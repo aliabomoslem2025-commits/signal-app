@@ -1,0 +1,16 @@
+name: LAN Remaining Cloud Reference Inventory
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["fix/lan-onboarding-gates"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory remaining cloud dependencies without logging secrets
+        run: python3 scripts/lan_static_inventory.py
