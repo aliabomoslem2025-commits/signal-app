@@ -36,7 +36,7 @@ import kotlin.time.Duration.Companion.minutes
  * To fulfill goal 2, this class  will not enqueue a fetch if there are already 2 active fetches
  * (or rather, 1 active and 1 waiting, since we use a single thread executor).
  *
- * Unfortunately we can't do this all in [FcmReceiveService] because it won't let us process
+ * Historically this lived in the Firebase receiver, which would not let us process
  * the next FCM message until [FcmReceiveService.onMessageReceived] returns,
  * but as soon as that method returns, it could also destroy the service. By not letting us control
  * when the service is destroyed, we can't accomplish both goals within that service.
