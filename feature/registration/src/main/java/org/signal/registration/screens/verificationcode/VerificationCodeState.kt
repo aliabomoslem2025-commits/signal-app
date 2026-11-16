@@ -15,6 +15,10 @@ data class VerificationCodeState(
   val sessionMetadata: SessionMetadata? = null,
   val e164: String = "",
   val isSubmittingCode: Boolean = false,
+  val localAuth: Boolean = false,
+  val localPasswordSetupRequired: Boolean = true,
+  /** Never serialize or log this temporary, server-issued activation code. */
+  val pendingLocalCode: String? = null,
   val rateLimits: SmsAndCallRateLimits = SmsAndCallRateLimits(),
   val incorrectCodeAttempts: Int = 0,
   val codeEntry: CodeEntryFieldState = CodeEntryFieldState(),
@@ -23,7 +27,7 @@ data class VerificationCodeState(
   val snackbars: Snackbars = Snackbars(),
   val dialogs: Dialogs = Dialogs()
 ) {
-  override fun toString(): String = "VerificationCodeState(sessionMetadata=$sessionMetadata, e164=$e164, isSubmittingCode=$isSubmittingCode, rateLimits=$rateLimits, incorrectCodeAttempts=$incorrectCodeAttempts, codeEntry=$codeEntry, showContactSupportSheet=$showContactSupportSheet,  showContactSupportDialog=$showContactSupportDialog, snackbars=$snackbars, dialogs=$dialogs)"
+  override fun toString(): String = "VerificationCodeState(sessionMetadata=$sessionMetadata, e164=$e164, isSubmittingCode=$isSubmittingCode, localAuth=$localAuth, pendingLocalPassword=${pendingLocalCode != null}, rateLimits=$rateLimits, incorrectCodeAttempts=$incorrectCodeAttempts, codeEntry=$codeEntry, showContactSupportSheet=$showContactSupportSheet,  showContactSupportDialog=$showContactSupportDialog, snackbars=$snackbars, dialogs=$dialogs)"
 
   /** Transient errors from submitting a code or registering, shown as snackbars. Cleared once shown and dismissed. */
   data class Snackbars(
@@ -31,6 +35,7 @@ data class VerificationCodeState(
     val unknownError: Boolean = false,
     val rateLimitedRetryAfter: Duration? = null,
     val incorrectVerificationCode: Boolean = false,
+    val localPasswordInvalid: Boolean = false,
     val registrationError: Boolean = false
   )
 
