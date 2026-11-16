@@ -11,10 +11,10 @@ import subprocess
 
 root = Path(__file__).resolve().parents[1]
 patterns = {
-    "Firebase runtime APIs": r"com\\.google\\.firebase|FirebaseMessaging|FirebaseInstallations|FirebaseApp",
-    "Google Play Services": r"com\\.google\\.android\\.gms|GoogleApiAvailability|getSignInClient",
-    "Public Signal hosts": r"signal\\.org|signal\\.me|signal\\.art|signal\\.link|signal\\.app",
-    "Cloud hosted vendors": r"cloudflare|googleapis|stripe\\.com|giphy|amazonaws|firebaseio",
+    "Firebase runtime APIs": r"com\.google\.firebase|FirebaseMessaging|FirebaseInstallations|FirebaseApp",
+    "Google Play Services": r"com\.google\.android\.gms|GoogleApiAvailability|getSignInClient",
+    "Public Signal hosts": r"signal\.org|signal\.me|signal\.art|signal\.link|signal\.app",
+    "Cloud hosted vendors": r"cloudflare|googleapis|stripe\.com|giphy|amazonaws|firebaseio",
     "Legacy SMS verification": r"SmsRetriever|SmsManager|requestSmsVerificationCode|sendSms|SmsCode",
 }
 
@@ -37,9 +37,9 @@ for category, raw in patterns.items():
         count = len(compiled.findall(data))
         if count:
             found[rel] = count
-    print(f"\\n== {category} : {len(found)} files ==")
+    print(f"\n== {category} : {len(found)} files ==")
     for path, count in sorted(found.items(), key=lambda item: (-item[1], item[0]))[:55]:
         print(f"  {path} ({count} refs)")
     if len(found) > 55:
         print(f"  ... {len(found)-55} further files")
-print("\\nFindings are an inventory, not a statement that every reference makes a public network request.")
+print("\nFindings are an inventory, not a statement that every reference makes a public network request.")
