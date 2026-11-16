@@ -5,6 +5,7 @@
 
 package org.signal.registration.screens.verificationcode
 
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,6 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +44,8 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -82,6 +90,7 @@ fun VerificationCodeScreen(
 
   LaunchedEffect(state.snackbars) {
     val (message, dismissedEvent) = when {
+      state.snackbars.localPasswordInvalid -> resources.getString(R.string.lan_password_incorrect) to VerificationCodeScreenEvents.LocalPasswordErrorDismissed
       state.snackbars.incorrectVerificationCode -> resources.getString(R.string.VerificationCodeScreen__incorrect_code) to VerificationCodeScreenEvents.IncorrectVerificationCodeSnackbarDismissed
       state.snackbars.networkError -> resources.getString(R.string.VerificationCodeScreen__network_error) to VerificationCodeScreenEvents.NetworkErrorSnackbarDismissed
       state.snackbars.rateLimitedRetryAfter != null -> resources.getString(R.string.VerificationCodeScreen__too_many_attempts_try_again_in_s, state.snackbars.rateLimitedRetryAfter.toString()) to VerificationCodeScreenEvents.RateLimitedSnackbarDismissed
@@ -95,6 +104,7 @@ fun VerificationCodeScreen(
   }
 
   RequestCodeErrorDialogs(state.dialogs, onEvent)
+  LocalPasswordDialog(state, onEvent)
 
   LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
     onEvent(VerificationCodeScreenEvents.Foregrounded)
@@ -135,6 +145,56 @@ fun VerificationCodeScreen(
       )
     }
   }
+}
+
+@Composable
+private fun LocalPasswordDialog(state: VerificationCodeState, onEvent: (VerificationCodeScreenEvents) -> Unit) {
+  val code = state.pendingLocalCode ?: return
+  var password by remember(code) { mutableStateOf("") }
+  var confirmation by remember(code) { mutableStateOf("") }
+  val setupRequired = state.localPasswordSetupRequired
+  val canSubmit = password.length >= 12 && (!setupRequired || password == confirmation) && !state.isSubmittingCode
+
+  AlertDialog(
+    onDismissRequest = { if (!state.isSubmittingCode) onEvent(VerificationCodeScreenEvents.LocalPasswordCancelled) },
+    title = { Text(stringResource(if (setupRequired) R.string.lan_password_create_title else R.string.lan_password_enter_title)) },
+    text = {
+      Column {
+        Text(stringResource(if (setupRequired) R.string.lan_password_create_explainer else R.string.lan_password_enter_explainer))
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+          value = password,
+          onValueChange = { password = it },
+          label = { Text(stringResource(R.string.lan_password_label)) },
+          visualTransformation = PasswordVisualTransformation(),
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+          singleLine = true
+        )
+        if (setupRequired) {
+          Spacer(Modifier.height(8.dp))
+          OutlinedTextField(
+            value = confirmation,
+            onValueChange = { confirmation = it },
+            label = { Text(stringResource(R.string.lan_password_repeat)) },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            singleLine = true
+          )
+        }
+      }
+    },
+    confirmButton = {
+      TextButton(
+        enabled = canSubmit,
+        onClick = { onEvent(VerificationCodeScreenEvents.LocalPasswordSubmitted(password, if (setupRequired) confirmation else "")) }
+      ) { Text(stringResource(R.string.lan_password_continue)) }
+    },
+    dismissButton = {
+      TextButton(onClick = { onEvent(VerificationCodeScreenEvents.LocalPasswordCancelled) }) {
+        Text(stringResource(R.string.lan_password_cancel))
+      }
+    }
+  )
 }
 
 /**
@@ -226,7 +286,7 @@ private fun OnePaneLayout(
             .padding(params.footerPadding),
           horizontalArrangement = Arrangement.SpaceAround
         ) {
-          AlternateCodeOptions(state, onEvent)
+          if (!state.localAuth) AlternateCodeOptions(state, onEvent)
         }
       }
     }
@@ -395,7 +455,7 @@ private fun Description(state: VerificationCodeState, onEvent: (VerificationCode
   )
 
   Text(
-    text = stringResource(R.string.VerificationCodeScreen__enter_the_code_we_sent_to_s, state.e164),
+    text = if (state.localAuth) stringResource(R.string.lan_verification_automatic_code) else stringResource(R.string.VerificationCodeScreen__enter_the_code_we_sent_to_s, state.e164),
     style = if (twoPane) MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.bodyLarge,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
     modifier = Modifier.padding(top = 16.dp)
