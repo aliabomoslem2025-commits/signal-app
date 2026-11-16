@@ -125,7 +125,7 @@ class NtfyPushService : SafeForegroundService() {
         throw cancelled
       } catch (e: Exception) {
         // Do not log the private ntfy topic, URL with topic, or any auth token.
-        Log.w(TAG, "Local ntfy stream interrupted; reconnecting", e.javaClass.simpleName)
+        Log.w(TAG, "Local ntfy stream interrupted; reconnecting")
       }
       if (!scope.isActive) break
       delay(backoff * 1000)
