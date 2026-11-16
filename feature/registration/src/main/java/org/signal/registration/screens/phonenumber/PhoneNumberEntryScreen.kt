@@ -204,6 +204,7 @@ fun PhoneNumberScreen(
       }
       message to PhoneNumberEntryScreenEvents.RateLimitedDialogDismissed
     }
+    state.dialogs.unauthorizedDevice -> stringResource(R.string.LanRegistration__unauthorized_device) to PhoneNumberEntryScreenEvents.UnauthorizedDeviceDialogDismissed
     state.dialogs.unknownError -> stringResource(R.string.VerificationCodeScreen__an_unexpected_error_occurred) to PhoneNumberEntryScreenEvents.UnknownErrorDialogDismissed
     state.dialogs.couldNotRequestCodeWithSelectedTransport -> stringResource(R.string.VerificationCodeScreen__could_not_send_code_via_selected_method) to PhoneNumberEntryScreenEvents.CouldNotRequestCodeWithSelectedTransportDialogDismissed
     state.dialogs.unableToSendSms -> stringResource(R.string.VerificationCodeScreen__unable_to_send_sms) to PhoneNumberEntryScreenEvents.UnableToSendSmsDialogDismissed
