@@ -102,12 +102,8 @@ dependencies {
   implementation(libs.androidx.compose.ui.tooling.preview)
   debugImplementation(libs.androidx.compose.ui.tooling.core)
 
-  // Firebase & Play Services
-  implementation(libs.firebase.messaging) {
-    exclude(group = "com.google.firebase", module = "firebase-core")
-    exclude(group = "com.google.firebase", module = "firebase-analytics")
-    exclude(group = "com.google.firebase", module = "firebase-measurement-connector")
-  }
+  // This example is offline/LAN-only as well: it must not pull Firebase
+  // into the build or register a cloud push receiver.
   implementation(libs.google.play.services.base)
   implementation(libs.kotlinx.coroutines.play.services)
 }
