@@ -392,6 +392,15 @@ fun TopAppBar(
             menuController.hide()
           }
         )
+        DropdownMenus.Item(
+          text = { Text(text = stringResource(R.string.LanRegistration__local_server_setup)) },
+          onClick = {
+            context.startActivity(
+              Intent().setClassName(context.packageName, "org.thoughtcrime.securesms.registration.local.LocalServerSettingsActivity")
+            )
+            menuController.hide()
+          }
+        )
         if (isLinkAndSyncAvailable) {
           DropdownMenus.Item(
             text = { Text(text = stringResource(R.string.RegistrationActivity_link_device)) },
