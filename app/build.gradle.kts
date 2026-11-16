@@ -640,8 +640,6 @@ androidComponents {
     }
     variant.sources.assets?.addGeneratedSourceDirectory(taskProvider) { it.outputDir }
   }
-
-
 }
 
 baselineProfile {
