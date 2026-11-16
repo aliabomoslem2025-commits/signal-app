@@ -64,6 +64,8 @@ check("CustomDns(\"1.1.1.1\")" not in network, "Public Cloudflare DNS must be ab
 
 gradle = read("app/build.gradle.kts")
 check("lanDocument" in gradle and "Release blocked" in gradle, "Gradle must read LAN JSON and block unconfigured releases")
+check("libs.firebase.messaging" not in gradle, "Firebase Messaging runtime dependency must be removed")
+check("firebase-messaging =" not in read("gradle/libs.versions.toml"), "Firebase Messaging version catalog entry remains")
 check("LAN1." in read("app/src/main/java/org/thoughtcrime/securesms/registration/local/LocalDeviceAuthClient.kt"), "Signed LAN registration ticket required")
 
 if errors:
