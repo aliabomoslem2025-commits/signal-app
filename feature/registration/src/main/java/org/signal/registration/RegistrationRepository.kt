@@ -152,12 +152,12 @@ class RegistrationRepository(
         context = application,
         networkController = dependencies.networkController,
         storageController = dependencies.storageController,
-        isLinkAndSyncAvailable = dependencies.isLinkAndSyncAvailable,
-        isPhoneNumberlessRegistrationAvailable = dependencies.isPhoneNumberlessRegistrationAvailable,
-        isGooglePlayBillingAvailable = dependencies.isGooglePlayBillingAvailable,
+        isLinkAndSyncAvailable = !dependencies.networkController.isLocalAuthEnabled() && dependencies.isLinkAndSyncAvailable,
+        isPhoneNumberlessRegistrationAvailable = !dependencies.networkController.isLocalAuthEnabled() && dependencies.isPhoneNumberlessRegistrationAvailable,
+        isGooglePlayBillingAvailable = !dependencies.networkController.isLocalAuthEnabled() && dependencies.isGooglePlayBillingAvailable,
         signalLoginPurchaseApi = BillingFactory.createOneTimePurchaseApi(
           context = application,
-          isAvailable = dependencies.isGooglePlayBillingAvailable
+          isAvailable = !dependencies.networkController.isLocalAuthEnabled() && dependencies.isGooglePlayBillingAvailable
         )
       )
     }
