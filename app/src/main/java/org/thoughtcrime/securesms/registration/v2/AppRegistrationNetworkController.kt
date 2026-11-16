@@ -36,6 +36,8 @@ import org.signal.libsignal.zkgroup.receipts.ReceiptCredentialResponse
 import org.signal.libsignal.zkgroup.receipts.ReceiptSerial
 import org.signal.network.NetworkResult
 import org.signal.network.api.ArchiveApiV2
+import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.signal.network.api.RegistrationApiV2
 import org.signal.network.api.RegistrationApiV2.AccountAttributes
 import org.signal.network.api.RegistrationApiV2.CheckSvrCredentialsError
@@ -140,6 +142,8 @@ class AppRegistrationNetworkController(
   private val registrationApi: RegistrationApiV2
 ) : NetworkController {
 
+  private val localAuth by lazy { LocalDeviceAuthClient(context) }
+
   companion object {
     private val TAG = Log.tag(AppRegistrationNetworkController::class)
     private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
@@ -152,11 +156,21 @@ class AppRegistrationNetworkController(
     mcc: String?,
     mnc: String?
   ): RequestResult<SessionMetadata, CreateSessionError> {
-    return registrationApi.createVerificationSession(e164, fcmToken, mcc, mnc)
+    return try {
+      RequestResult.Success(localAuth.createSession(e164))
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      RequestResult.ApplicationError(e)
+    }
   }
 
   override suspend fun getSession(sessionId: String): RequestResult<SessionMetadata, GetSessionStatusError> {
-    return registrationApi.getSessionStatus(sessionId)
+    return when {
+      localAuth.isChallengeSession(sessionId) -> RequestResult.Success(SessionMetadata(sessionId, null, null, null, true, emptyList(), false))
+      localAuth.isCompletedSession(sessionId) -> RequestResult.Success(SessionMetadata(sessionId, null, null, null, false, emptyList(), true))
+      else -> RequestResult.ApplicationError(SecurityException("Only device-bound LAN sessions are allowed"))
+    }
   }
 
   override suspend fun updateSession(
@@ -164,11 +178,11 @@ class AppRegistrationNetworkController(
     pushChallengeToken: String?,
     captchaToken: String?
   ): RequestResult<SessionMetadata, UpdateSessionError> {
-    return registrationApi.updateVerificationSession(
-      sessionId = sessionId,
-      captchaToken = captchaToken,
-      pushChallengeToken = pushChallengeToken
-    )
+    return when {
+      localAuth.isChallengeSession(sessionId) -> RequestResult.Success(SessionMetadata(sessionId, null, null, null, true, emptyList(), false))
+      localAuth.isCompletedSession(sessionId) -> RequestResult.Success(SessionMetadata(sessionId, null, null, null, false, emptyList(), true))
+      else -> RequestResult.ApplicationError(SecurityException("Public CAPTCHA and push-challenge sessions are disabled"))
+    }
   }
 
   override suspend fun requestVerificationCode(
@@ -177,14 +191,28 @@ class AppRegistrationNetworkController(
     androidSmsRetrieverSupported: Boolean,
     transport: VerificationCodeTransport
   ): RequestResult<SessionMetadata, RequestVerificationCodeError> {
-    return registrationApi.requestVerificationCode(sessionId, locale, androidSmsRetrieverSupported, transport)
+    if (!localAuth.isChallengeSession(sessionId)) return RequestResult.ApplicationError(SecurityException("Invalid LAN challenge"))
+    return try {
+      RequestResult.Success(localAuth.requestCode(sessionId))
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      RequestResult.ApplicationError(e)
+    }
   }
 
   override suspend fun submitVerificationCode(
     sessionId: String,
     verificationCode: String
   ): RequestResult<SessionMetadata, SubmitVerificationCodeError> {
-    return registrationApi.submitVerificationCode(sessionId, verificationCode)
+    if (!localAuth.isChallengeSession(sessionId)) return RequestResult.ApplicationError(SecurityException("Invalid LAN challenge"))
+    return try {
+      RequestResult.Success(localAuth.complete(sessionId, verificationCode))
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      RequestResult.ApplicationError(e)
+    }
   }
 
   override suspend fun registerAccount(
@@ -202,6 +230,12 @@ class AppRegistrationNetworkController(
     totp: Int?,
     webAuthnResponse: String?
   ): RequestResult<RegisterAccountResponse, RegisterAccountError> {
+    // A correct E.164 number or a recovery password is NEVER sufficient by itself.
+    // The server independently validates and consumes the signed single-use ticket.
+    if (e164.isNullOrBlank() || sessionId.isNullOrBlank() || !localAuth.isCompletedSession(sessionId) ||
+        !recoveryPassword.isNullOrBlank() || receiptCredentialPresentation != null || aci != null) {
+      return RequestResult.ApplicationError(SecurityException("Only an administrator-enrolled handset can register"))
+    }
     return registrationApi.registerAccount(
       e164 = e164,
       password = password,
@@ -211,7 +245,7 @@ class AppRegistrationNetworkController(
       attributes = attributes,
       aciPreKeys = aciPreKeys,
       pniPreKeys = pniPreKeys,
-      fcmToken = fcmToken,
+      fcmToken = null,
       skipDeviceTransfer = skipDeviceTransfer,
       aci = aci,
       totp = totp,
@@ -258,14 +292,7 @@ class AppRegistrationNetworkController(
     }
   }
 
-  override suspend fun getFcmToken(): String? {
-    return try {
-      FcmUtil.getToken(context).orElse(null)
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to get FCM token", e)
-      null
-    }
-  }
+  override suspend fun getFcmToken(): String? = null
 
   override suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
     try {
