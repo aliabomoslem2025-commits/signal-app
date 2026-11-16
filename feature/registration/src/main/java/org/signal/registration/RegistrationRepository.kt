@@ -292,6 +292,11 @@ class RegistrationRepository(
    * 5. US, as a last resort.
    */
   fun getDefaultRegionCode(): String {
+    // Private LAN login does not inspect SIM state, network carrier, or
+    // request phone permissions. Region is a display/formatting default only.
+    if (isLocalAuthEnabled()) {
+      return CountryUtils.localeToRegionCode(Locale.getDefault()).takeIfValidRegion() ?: "US"
+    }
     return deviceNumberRegionCode()
       ?: Util.getNetworkCountryIso(context).takeIfValidRegion()
       ?: Util.getSimCountryIso(context).orElse(null).takeIfValidRegion()

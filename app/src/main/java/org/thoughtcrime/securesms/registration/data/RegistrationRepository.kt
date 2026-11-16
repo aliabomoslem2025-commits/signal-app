@@ -378,13 +378,13 @@ object RegistrationRepository {
   /**
    * Submits the user-entered verification code to the service.
    */
-  suspend fun submitVerificationCode(context: Context, sessionId: String, registrationData: RegistrationData): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
-    try {
-      val metadata = LocalDeviceAuthClient(context).complete(sessionId, registrationData.code)
-      VerificationCodeRequestResult.Success(metadata.id, 0.seconds, 0.seconds, 0.seconds, false, emptyList(), true)
-    } catch (e: Exception) {
-      VerificationCodeRequestResult.UnknownError(e)
-    }
+  suspend fun submitVerificationCode(context: Context, sessionId: String, registrationData: RegistrationData): VerificationCodeRequestResult {
+    // The legacy registration UI has no user-entered second factor, so it must
+    // never redeem a LAN ticket. New registrations use the v2 flow, which
+    // requires the user's password before the Go sidecar issues a ticket.
+    return VerificationCodeRequestResult.UnknownError(
+      SecurityException("Legacy code-only registration is disabled; use the device-bound password registration flow")
+    )
   }
 
   /**

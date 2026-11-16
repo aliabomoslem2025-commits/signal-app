@@ -5,10 +5,7 @@
 
 package org.signal.registration.screens.phonenumber
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.content.Context
-import android.content.pm.PackageManager
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -40,12 +37,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,8 +64,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import com.google.i18n.phonenumbers.PhoneNumberUtil
 import org.signal.core.ui.compose.AllDevicePreviews
 import org.signal.core.ui.compose.Buttons
 import org.signal.core.ui.compose.Dialogs
@@ -80,10 +73,7 @@ import org.signal.core.ui.compose.Previews
 import org.signal.core.ui.compose.Scaffolds
 import org.signal.core.ui.compose.SignalIcons
 import org.signal.core.ui.compose.TextFields
-import org.signal.core.util.Util
-import org.signal.core.util.logging.Log
 import org.signal.registration.R
-import org.signal.registration.RegistrationDependencies
 import org.signal.registration.screens.OnePaneRegistrationScaffold
 import org.signal.registration.screens.RegistrationScaffold
 import org.signal.registration.screens.TwoPaneRegistrationScaffold
@@ -100,24 +90,6 @@ import org.signal.core.ui.R as CoreR
 private const val TAG = "PhoneNumberScreen"
 
 /**
- * Reads the device's own phone number from the SIM as an E164 string, but only if the relevant phone permission has
- * already been granted. Returns null if the permission is missing or the number is unavailable. We never prompt for
- * the permission solely to prefill the number.
- */
-@SuppressLint("MissingPermission")
-private fun readDeviceNumberE164(context: Context): String? {
-  val hasPhonePermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED ||
-    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_NUMBERS) == PackageManager.PERMISSION_GRANTED
-
-  if (!hasPhonePermission) {
-    return null
-  }
-
-  val deviceNumber = Util.getDeviceNumber(context).orElse(null) ?: return null
-  return PhoneNumberUtil.getInstance().format(deviceNumber, PhoneNumberUtil.PhoneNumberFormat.E164)
-}
-
-/**
  * Phone number entry screen
  */
 @Composable
@@ -126,27 +98,7 @@ fun PhoneNumberScreen(
   onEvent: (PhoneNumberEntryScreenEvents) -> Unit,
   modifier: Modifier = Modifier
 ) {
-  val context = LocalContext.current
-  var hasRequestedPhoneNumberHint by rememberSaveable { mutableStateOf(false) }
-  val currentNationalNumber by rememberUpdatedState(state.nationalNumber)
-
-  val prefillFromDeviceNumberIfAllowed = {
-    if (currentNationalNumber.isEmpty()) {
-      readDeviceNumberE164(context)?.let { e164 ->
-        onEvent(PhoneNumberEntryScreenEvents.FullPhoneNumberEntered(e164))
-      }
-    }
-  }
-
-  // No Google Play Services phone-number picker in the isolated LAN build.
-  // Telephony autofill is a convenience only, never a SIM ownership proof.
-  LaunchedEffect(state.initialized) {
-    if (!state.initialized || hasRequestedPhoneNumberHint || state.nationalNumber.isNotEmpty() || state.preExistingRegistrationData != null) {
-      return@LaunchedEffect
-    }
-    hasRequestedPhoneNumberHint = true
-    prefillFromDeviceNumberIfAllowed()
-  }
+  // LAN login uses the number typed by the user; never consult the SIM or carrier.
 
   if (state.dialogs.confirmNumber) {
     Dialogs.SimpleAlertDialog(
@@ -334,6 +286,16 @@ fun TopAppBar(
     scrollBehavior = scrollBehavior,
     actions = {
       val menuController = remember { DropdownMenus.MenuController() }
+
+      TextButton(
+        onClick = {
+          context.startActivity(
+            Intent().setClassName(context.packageName, "org.thoughtcrime.securesms.registration.local.LocalServerSettingsActivity")
+          )
+        }
+      ) {
+        Text(text = "ⓘ", style = MaterialTheme.typography.headlineSmall)
+      }
 
       IconButton(
         onClick = { menuController.show() },
