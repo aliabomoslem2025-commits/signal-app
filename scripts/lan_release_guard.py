@@ -68,6 +68,12 @@ check("val DNS: Dns = Dns.SYSTEM" in network, "System DNS required")
 check("= uncensoredConfiguration" in network, "Public Signal fallback must be disabled")
 check("LocalServerTrustStore(context)" in network, "Missing private CA trust")
 check("CustomDns(\"1.1.1.1\")" not in network, "Public Cloudflare DNS must be absent")
+check("LanDestinationPolicy(" in network and "destinationPolicy.permits(" in network, "Signal HTTP network requests must obey the LAN allowlist")
+policy = read("app/src/main/java/org/thoughtcrime/securesms/push/LanDestinationPolicy.kt")
+check("https" in policy and "authorities" in policy, "Missing explicit LAN HTTPS hostname + port policy")
+check("instanceFollowRedirects = false" in client, "Local device-auth must not follow off-LAN HTTP redirects")
+check("instanceFollowRedirects = false" in ntfy, "ntfy SSE subscriber must not follow off-LAN HTTP redirects")
+
 
 gradle = read("app/build.gradle.kts")
 check("lanDocument" in gradle and "Release blocked" in gradle, "Gradle must read LAN JSON and block unconfigured releases")

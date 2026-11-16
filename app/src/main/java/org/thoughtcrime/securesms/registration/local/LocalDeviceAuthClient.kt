@@ -125,6 +125,7 @@ class LocalDeviceAuthClient(context: Context) {
       val tls = SSLContext.getInstance("TLS").apply { init(null, trustManagers.trustManagers, null) }
       sslSocketFactory = tls.socketFactory
       requestMethod = "POST"
+      instanceFollowRedirects = false
       connectTimeout = 8000
       readTimeout = 8000
       doOutput = true

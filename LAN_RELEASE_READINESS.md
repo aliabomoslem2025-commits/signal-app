@@ -110,6 +110,18 @@ to an isolated LAN with WAN blocked:
 | WAN packet capture | No unauthorized traffic to public Signal/Google/Firebase/Stripe endpoints |
 | Account suspension / device and server-session revocation | Existing device credentials revoked on Signal Server, not only local-auth tickets |
 
+## HTTP destination safety
+
+- Core Signal OkHttp requests are restricted by `LanDestinationPolicy` to
+  the exact HTTPS hostnames and ports listed in the compiled configuration.
+  Unconfigured destinations and redirect hops fail closed.
+- The direct LAN device-auth POST and ntfy SSE GET disable automatic HTTP
+  redirects, so an untrusted reverse proxy cannot silently move requests
+  to a different host.
+- This is **not a complete device-wide egress firewall**. Third-party clients,
+  the native libsignal stack, WebView, link previews and operating-system
+  components still require isolated-network inspection and firewall policy.
+
 ## Remaining blockers / caveats
 
 - **Full Android CI** on the recreated repository has not yet produced

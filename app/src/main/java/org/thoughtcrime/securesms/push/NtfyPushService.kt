@@ -180,6 +180,7 @@ class NtfyPushService : SafeForegroundService() {
     val conn = (url.openConnection() as HttpsURLConnection).apply {
       configureTrust(this)
       requestMethod = "GET"
+      instanceFollowRedirects = false
       connectTimeout = 10_000
       readTimeout = 60_000
       setRequestProperty("Accept", "text/event-stream")
