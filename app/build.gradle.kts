@@ -7,6 +7,7 @@ import com.android.build.api.variant.HasAndroidTest
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
+import java.net.URI
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -291,13 +292,13 @@ android {
     buildConfigField("String", "SIGNAL_CDN2_URL", lanQuoted(lanService("cdn2")))
     buildConfigField("String", "SIGNAL_CDN3_URL", lanQuoted(lanService("cdn3")))
     buildConfigField("String", "SIGNAL_CDSI_URL", lanQuoted(lanService("cdsi")))
-    buildConfigField("String", "SIGNAL_SERVICE_STATUS_URL", lanQuoted(java.net.URI(lanService("signalApi")).host))
+    buildConfigField("String", "SIGNAL_SERVICE_STATUS_URL", lanQuoted(URI(lanService("signalApi")).host))
     buildConfigField("String", "SIGNAL_SVR2_URL", lanQuoted(lanService("svr2")))
     buildConfigField("String", "SIGNAL_SFU_URL", lanQuoted(lanService("callingSfu")))
     buildConfigField("String", "SIGNAL_STAGING_SFU_URL", lanQuoted(lanService("callingSfu")))
     buildConfigField("String[]", "SIGNAL_SFU_INTERNAL_NAMES", "new String[]{\"LAN\"}")
     buildConfigField("String[]", "SIGNAL_SFU_INTERNAL_URLS", "new String[]{${lanQuoted(lanService("callingSfu"))}}")
-    buildConfigField("String", "CONTENT_PROXY_HOST", lanQuoted(java.net.URI(lanService("signalApi")).host))
+    buildConfigField("String", "CONTENT_PROXY_HOST", lanQuoted(URI(lanService("signalApi")).host))
     buildConfigField("int", "CONTENT_PROXY_PORT", "443")
     buildConfigField("String[]", "SIGNAL_SERVICE_IPS", "new String[]{}")
     buildConfigField("String[]", "SIGNAL_STORAGE_IPS", "new String[]{}")
@@ -321,7 +322,7 @@ android {
     buildConfigField("String", "GIPHY_API_KEY", lanQuoted(""))
     buildConfigField("String", "SIGNAL_CAPTCHA_URL", lanQuoted(lanService("signalApi") + "/disabled-captcha"))
     buildConfigField("String", "RECAPTCHA_PROOF_URL", lanQuoted(lanService("signalApi") + "/disabled-captcha"))
-    buildConfigField("String", "WEBAUTHN_RP_ID", lanQuoted(java.net.URI(lanService("signalApi")).host))
+    buildConfigField("String", "WEBAUTHN_RP_ID", lanQuoted(URI(lanService("signalApi")).host))
     buildConfigField("org.signal.libsignal.net.Network.Environment", "LIBSIGNAL_NET_ENV", "org.signal.libsignal.net.Network.Environment.PRODUCTION")
     buildConfigField("int", "LIBSIGNAL_LOG_LEVEL", "org.signal.libsignal.protocol.logging.SignalProtocolLogger.INFO")
 
