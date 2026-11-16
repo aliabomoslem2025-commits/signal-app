@@ -92,8 +92,6 @@ import org.signal.registration.NetworkController.ProvisioningMessage
 import org.signal.registration.ReceiptCredentialResult
 import org.signal.registration.proto.RegistrationProvisionMessage
 import org.signal.registration.sample.MainActivity
-import org.signal.registration.sample.fcm.FcmUtil
-import org.signal.registration.sample.fcm.PushChallengeReceiver
 import org.signal.registration.sample.storage.RegistrationPreferences
 import org.whispersystems.signalservice.api.link.TransferArchiveResponse
 import org.whispersystems.signalservice.api.provisioning.ProvisioningSocket
@@ -294,26 +292,15 @@ class DemoNetworkController(
     }
   }
 
-  override suspend fun getFcmToken(): String? {
-    return try {
-      FcmUtil.getToken(context)
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to get FCM token", e)
-      null
-    }
-  }
+  // Compatibility hooks required by the demonstration controller interface.
+  // LAN registration uses signed local-auth challenges, not Firebase.
+  override suspend fun getFcmToken(): String? = null
 
-  override suspend fun awaitPushChallengeToken(): String? {
-    return try {
-      PushChallengeReceiver.awaitChallenge()
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to await push challenge token", e)
-      null
-    }
-  }
+  override suspend fun awaitPushChallengeToken(): String? = null
 
   override fun getCaptchaUrl(): String {
-    return "https://signalcaptchas.org/staging/registration/generate.html"
+    // The LAN device-auth flow does not use third-party CAPTCHA.
+    return "about:blank"
   }
 
   override fun startNewDeviceTransferServer(context: android.content.Context, aep: AccountEntropyPool) {
