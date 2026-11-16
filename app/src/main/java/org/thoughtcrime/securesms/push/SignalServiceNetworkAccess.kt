@@ -43,7 +43,6 @@ class SignalServiceNetworkAccess(context: Context) {
   companion object {
     private val TAG = Log.tag(SignalServiceNetworkAccess::class.java)
 
-    @JvmField
     // Do not leak private .lan host lookups to Cloudflare or public static IPs.
     @JvmField
     val DNS: Dns = Dns.SYSTEM
@@ -306,35 +305,10 @@ class SignalServiceNetworkAccess(context: Context) {
     return getConfiguration(SignalStore.account.e164)
   }
 
+  @Suppress("UNUSED_PARAMETER")
   fun getConfiguration(e164: String?): SignalServiceConfiguration {
-    // LAN release is intentionally fail-closed and ignores censorship,
-    // public domain-fronting, and proxy fallback.
+    // No public Signal or domain-fronting fallback, regardless of country code.
     return uncensoredConfiguration
-
-    @Suppress("UNREACHABLE_CODE")
-    if (e164 == null || SignalStore.proxy.isProxyEnabled) {
-      return uncensoredConfiguration
-    }
-
-    val countryCode: Int = PhoneNumberUtil.getInstance().parse(e164, null).countryCode
-
-    return when (SignalStore.settings.censorshipCircumventionEnabled) {
-      SettingsValues.CensorshipCircumventionEnabled.ENABLED -> {
-        censorshipConfiguration[countryCode] ?: defaultCensoredConfiguration
-      }
-
-      SettingsValues.CensorshipCircumventionEnabled.DISABLED -> {
-        uncensoredConfiguration
-      }
-
-      SettingsValues.CensorshipCircumventionEnabled.DEFAULT -> {
-        if (defaultCensoredCountryCodes.contains(countryCode)) {
-          censorshipConfiguration[countryCode] ?: defaultCensoredConfiguration
-        } else {
-          uncensoredConfiguration
-        }
-      }
-    }
   }
 
   fun isCensored(): Boolean {
@@ -345,9 +319,8 @@ class SignalServiceNetworkAccess(context: Context) {
     return getConfiguration(number) != uncensoredConfiguration
   }
 
-  fun isCountryCodeCensoredByDefault(countryCode: Int): Boolean {
-    return defaultCensoredCountryCodes.contains(countryCode)
-  }
+  @Suppress("UNUSED_PARAMETER")
+  fun isCountryCodeCensoredByDefault(countryCode: Int): Boolean = false
 
   private fun buildGConfiguration(
     hostConfigs: List<HostConfig>
