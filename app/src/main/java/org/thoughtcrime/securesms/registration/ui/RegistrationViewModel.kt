@@ -59,6 +59,7 @@ import org.thoughtcrime.securesms.registration.data.AccountRegistrationResult
 import org.thoughtcrime.securesms.registration.data.LocalRegistrationMetadataUtil
 import org.thoughtcrime.securesms.registration.data.RegistrationData
 import org.thoughtcrime.securesms.registration.data.RegistrationRepository
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.registration.data.network.BackupAuthCheckResult
 import org.thoughtcrime.securesms.registration.data.network.Challenge
 import org.thoughtcrime.securesms.registration.data.network.RegisterAccountResult
@@ -225,22 +226,16 @@ class RegistrationViewModel : ViewModel() {
   }
 
   fun fetchFcmToken(context: Context) {
-    viewModelScope.launch(context = coroutineExceptionHandler) {
-      val fcmToken = RegistrationRepository.getFcmToken(context)
-      store.update {
-        it.copy(registrationCheckpoint = RegistrationCheckpoint.PUSH_NETWORK_AUDITED, isFcmSupported = true, fcmToken = fcmToken)
-      }
+    // Keep this old UI checkpoint, but do not contact Firebase or enable
+    // SMS retriever. All registration is backed by a signed LAN challenge.
+    store.update {
+      it.copy(registrationCheckpoint = RegistrationCheckpoint.PUSH_NETWORK_AUDITED, isFcmSupported = false, fcmToken = null)
     }
   }
 
   private suspend fun updateFcmToken(context: Context): String? {
-    Log.d(TAG, "Fetching FCM token…")
-    val fcmToken = RegistrationRepository.getFcmToken(context)
-    store.update {
-      it.copy(fcmToken = fcmToken)
-    }
-    Log.d(TAG, "FCM token fetched.", true)
-    return fcmToken
+    store.update { it.copy(fcmToken = null, isFcmSupported = false) }
+    return null
   }
 
   fun togglePinKeyboardType() {
@@ -264,7 +259,7 @@ class RegistrationViewModel : ViewModel() {
   fun onBackupSuccessfullyRestored() {
     val recoveryPassword = SignalStore.svr.recoveryPassword
     store.update {
-      it.copy(registrationCheckpoint = RegistrationCheckpoint.BACKUP_RESTORED_OR_SKIPPED, recoveryPassword = SignalStore.svr.recoveryPassword, canSkipSms = recoveryPassword != null, isReRegister = true)
+      it.copy(registrationCheckpoint = RegistrationCheckpoint.BACKUP_RESTORED_OR_SKIPPED, recoveryPassword = SignalStore.svr.recoveryPassword, canSkipSms = false, isReRegister = true)
     }
   }
 
@@ -274,7 +269,7 @@ class RegistrationViewModel : ViewModel() {
 
     val e164 = state.phoneNumber?.toE164() ?: return bail { Log.i(TAG, "Phone number was null after confirmation.") }
 
-    if (!state.userSkippedReregistration) {
+    if (!LocalServerConfig.load(context).localAuthOnly && !state.userSkippedReregistration) {
       if (hasRecoveryPassword() && matchesSavedE164(e164)) {
         // Re-registration when the local database is intact.
         Log.d(TAG, "Has recovery password, and therefore can skip SMS verification.")
@@ -289,7 +284,7 @@ class RegistrationViewModel : ViewModel() {
     }
 
     viewModelScope.launch {
-      if (!state.userSkippedReregistration) {
+      if (!LocalServerConfig.load(context).localAuthOnly && !state.userSkippedReregistration) {
         val svrCredentialsResult: BackupAuthCheckResult = RegistrationRepository.hasValidSvrAuthCredentials(context, e164, password)
 
         when (svrCredentialsResult) {
@@ -1060,8 +1055,9 @@ class RegistrationViewModel : ViewModel() {
     val currentState = store.value
     val code = currentState.enteredCode
     val e164: String = currentState.phoneNumber?.toE164() ?: throw IllegalStateException("Can't construct registration data without E164!")
-    val recoveryPassword = if (currentState.sessionId == null && hasRecoveryPassword()) store.value.recoveryPassword!! else null
-    return RegistrationData(code, e164, password, RegistrationRepository.getRegistrationId(), RegistrationRepository.getProfileKey(e164), currentState.fcmToken, RegistrationRepository.getPniRegistrationId(), recoveryPassword)
+    // Local phone registration must NEVER fall back to a recovery-password-only claim.
+    val recoveryPassword: String? = null
+    return RegistrationData(code, e164, password, RegistrationRepository.getRegistrationId(), RegistrationRepository.getProfileKey(e164), null, RegistrationRepository.getPniRegistrationId(), recoveryPassword)
   }
 
   /**
