@@ -106,8 +106,6 @@ class NtfyPushService : SafeForegroundService() {
 
   private suspend fun subscribeLoop() {
     var backoff = 2L
-    var lastMessageId: String? = null
-    var previousTopic: String? = null
     while (scope.isActive) {
       try {
         if (!SignalStore.account.isRegistered) {
@@ -119,13 +117,11 @@ class NtfyPushService : SafeForegroundService() {
           throw IOException("Could not provision private ntfy topic")
         }
         val topic = result.result
-        if (previousTopic != topic) {
-          // Resume only for this exact per-device topic after app/OS restarts.
-          lastMessageId = loadCursor(topic)
-          previousTopic = topic
-        }
         backoff = 2L
-        lastMessageId = consumeStream(topic, lastMessageId)
+        // Read the durable cursor on *every* reconnect. If the stream throws
+        // after enqueueing a wake, the in-memory return value is lost; using
+        // only an initial cursor would reprocess the whole cache repeatedly.
+        consumeStream(topic, loadCursor(topic))
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (e: Exception) {
@@ -175,7 +171,7 @@ class NtfyPushService : SafeForegroundService() {
     // The default platform hostname verifier remains unchanged.
   }
 
-  private fun consumeStream(topic: String, resumeFrom: String?): String? {
+  private fun consumeStream(topic: String, resumeFrom: String?) {
     // The per-device topic is a high-entropy capability assigned only after
     // authenticated registration. It is not embedded in the APK or logs.
     val base = LocalServerConfig.load(this).ntfyBaseUrl
@@ -225,6 +221,5 @@ class NtfyPushService : SafeForegroundService() {
       conn.disconnect()
       if (connection === conn) connection = null
     }
-    return last
   }
 }
