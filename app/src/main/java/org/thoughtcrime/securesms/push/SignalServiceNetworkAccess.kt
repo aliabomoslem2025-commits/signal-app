@@ -18,6 +18,7 @@ import org.signal.network.config.SignalStorageUrl
 import org.signal.network.config.SignalSvr2Url
 import org.signal.network.config.TrustStore
 import org.signal.network.exceptions.RequestCanceledException
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.BuildConfig
 import org.thoughtcrime.securesms.keyvalue.SettingsValues
 import org.thoughtcrime.securesms.keyvalue.SignalStore
@@ -42,24 +43,9 @@ class SignalServiceNetworkAccess(context: Context) {
   companion object {
     private val TAG = Log.tag(SignalServiceNetworkAccess::class.java)
 
+    // Do not leak private .lan host lookups to Cloudflare or public static IPs.
     @JvmField
-    val DNS: Dns = SequentialDns(
-      Dns.SYSTEM,
-      CustomDns("1.1.1.1"),
-      StaticDns(
-        mapOf(
-          BuildConfig.SIGNAL_URL.stripProtocol() to BuildConfig.SIGNAL_SERVICE_IPS.toSet(),
-          BuildConfig.STORAGE_URL.stripProtocol() to BuildConfig.SIGNAL_STORAGE_IPS.toSet(),
-          BuildConfig.SIGNAL_CDN_URL.stripProtocol() to BuildConfig.SIGNAL_CDN_IPS.toSet(),
-          BuildConfig.SIGNAL_CDN2_URL.stripProtocol() to BuildConfig.SIGNAL_CDN2_IPS.toSet(),
-          BuildConfig.SIGNAL_CDN3_URL.stripProtocol() to BuildConfig.SIGNAL_CDN3_IPS.toSet(),
-          BuildConfig.SIGNAL_SFU_URL.stripProtocol() to BuildConfig.SIGNAL_SFU_IPS.toSet(),
-          BuildConfig.CONTENT_PROXY_HOST.stripProtocol() to BuildConfig.SIGNAL_CONTENT_PROXY_IPS.toSet(),
-          BuildConfig.SIGNAL_CDSI_URL.stripProtocol() to BuildConfig.SIGNAL_CDSI_IPS.toSet(),
-          BuildConfig.SIGNAL_SVR2_URL.stripProtocol() to BuildConfig.SIGNAL_SVR2_IPS.toSet()
-        )
-      )
-    )
+    val DNS: Dns = Dns.SYSTEM
 
     private fun String.stripProtocol(): String {
       return this.removePrefix("https://")
@@ -144,6 +130,8 @@ class SignalServiceNetworkAccess(context: Context) {
   }
 
   private val serviceTrustStore: TrustStore = SignalServiceTrustStore(context)
+  private val localTrustStore: TrustStore = LocalServerTrustStore(context)
+  private val localEndpoints = LocalServerConfig.load(context)
   private val gTrustStore: TrustStore = DomainFrontingTrustStore(context)
   private val fTrustStore: TrustStore = DomainFrontingDigicertTrustStore(context)
 
@@ -259,7 +247,7 @@ class SignalServiceNetworkAccess(context: Context) {
     COUNTRY_CODE_PAKISTAN
   )
 
-  val uncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
+  private val upstreamUncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
     signalServiceUrls = arrayOf(SignalServiceUrl(BuildConfig.SIGNAL_URL, serviceTrustStore)),
     signalCdnUrlMap = mapOf(
       0 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN_URL, serviceTrustStore)),
@@ -272,6 +260,29 @@ class SignalServiceNetworkAccess(context: Context) {
     networkInterceptors = interceptors + directFetchFailureInterceptor,
     dns = Optional.of(DNS),
     signalProxy = if (SignalStore.proxy.isProxyEnabled) Optional.ofNullable(SignalStore.proxy.proxy) else Optional.empty(),
+    zkGroupServerPublicParams = zkGroupServerPublicParams,
+    genericServerPublicParams = genericServerPublicParams,
+    backupServerPublicParams = backupServerPublicParams,
+    censored = false
+  )
+
+  /**
+   * All self-hosted endpoints use the single bundled LAN CA and system DNS.
+   * Crucially there is NO fallback to public Signal/Google/Fastly hosts.
+   */
+  val uncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
+    signalServiceUrls = arrayOf(SignalServiceUrl(localEndpoints.signalApiUrl, localTrustStore)),
+    signalCdnUrlMap = mapOf(
+      0 to arrayOf(SignalCdnUrl(localEndpoints.cdn0Url, localTrustStore)),
+      2 to arrayOf(SignalCdnUrl(localEndpoints.cdn2Url, localTrustStore)),
+      3 to arrayOf(SignalCdnUrl(localEndpoints.cdn3Url, localTrustStore))
+    ),
+    signalStorageUrls = arrayOf(SignalStorageUrl(localEndpoints.storageUrl, localTrustStore)),
+    signalCdsiUrls = arrayOf(SignalCdsiUrl(localEndpoints.cdsiUrl, localTrustStore)),
+    signalSvr2Urls = arrayOf(SignalSvr2Url(localEndpoints.svr2Url, localTrustStore)),
+    networkInterceptors = interceptors,
+    dns = Optional.of(Dns.SYSTEM),
+    signalProxy = Optional.empty(),
     zkGroupServerPublicParams = zkGroupServerPublicParams,
     genericServerPublicParams = genericServerPublicParams,
     backupServerPublicParams = backupServerPublicParams,
@@ -294,30 +305,10 @@ class SignalServiceNetworkAccess(context: Context) {
     return getConfiguration(SignalStore.account.e164)
   }
 
+  @Suppress("UNUSED_PARAMETER")
   fun getConfiguration(e164: String?): SignalServiceConfiguration {
-    if (e164 == null || SignalStore.proxy.isProxyEnabled) {
-      return uncensoredConfiguration
-    }
-
-    val countryCode: Int = PhoneNumberUtil.getInstance().parse(e164, null).countryCode
-
-    return when (SignalStore.settings.censorshipCircumventionEnabled) {
-      SettingsValues.CensorshipCircumventionEnabled.ENABLED -> {
-        censorshipConfiguration[countryCode] ?: defaultCensoredConfiguration
-      }
-
-      SettingsValues.CensorshipCircumventionEnabled.DISABLED -> {
-        uncensoredConfiguration
-      }
-
-      SettingsValues.CensorshipCircumventionEnabled.DEFAULT -> {
-        if (defaultCensoredCountryCodes.contains(countryCode)) {
-          censorshipConfiguration[countryCode] ?: defaultCensoredConfiguration
-        } else {
-          uncensoredConfiguration
-        }
-      }
-    }
+    // No public Signal or domain-fronting fallback, regardless of country code.
+    return uncensoredConfiguration
   }
 
   fun isCensored(): Boolean {
@@ -328,9 +319,8 @@ class SignalServiceNetworkAccess(context: Context) {
     return getConfiguration(number) != uncensoredConfiguration
   }
 
-  fun isCountryCodeCensoredByDefault(countryCode: Int): Boolean {
-    return defaultCensoredCountryCodes.contains(countryCode)
-  }
+  @Suppress("UNUSED_PARAMETER")
+  fun isCountryCodeCensoredByDefault(countryCode: Int): Boolean = false
 
   private fun buildGConfiguration(
     hostConfigs: List<HostConfig>

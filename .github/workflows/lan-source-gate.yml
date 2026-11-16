@@ -1,0 +1,16 @@
+name: LAN Source Security Gate
+on:
+  push:
+    branches: ["main", "feat/lan-device-auth-ntfy-rebuild"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate LAN transport, device authorization and manifest
+        run: python3 scripts/lan_release_guard.py

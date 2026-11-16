@@ -28,6 +28,23 @@ plugins {
   id("pseudo-locales")
 }
 
+/** The only source of LAN server hostnames for a compiled APK. */
+val lanDocument = groovy.json.JsonSlurper().parseText(file("src/main/assets/server-config.json").readText()) as Map<*, *>
+val lanServices = lanDocument["services"] as Map<*, *>
+val lanSecurity = lanDocument["security"] as Map<*, *>
+val lanCrypto = lanDocument["crypto"] as Map<*, *>
+fun lanService(key: String): String = (lanServices[key] as String).trim().trimEnd('/')
+fun lanCryptoValue(key: String): String = (lanCrypto[key] as? String).orEmpty()
+fun lanQuoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+val lanCertificate = (lanSecurity["trustedCaPem"] as? String).orEmpty()
+if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) || it.contains("lanRelease", ignoreCase = true) }) {
+  require(lanCertificate.contains("-----BEGIN CERTIFICATE-----")) { "Release blocked: configure a real private LAN CA in server-config.json" }
+  require(listOf("zkGroupServerPublicParams", "genericServerPublicParams", "backupServerPublicParams", "svr2MrEnclave").all { lanCryptoValue(it).isNotBlank() }) {
+    "Release blocked: set all cryptographic public parameters from YOUR Signal Server"
+  }
+  require(lanServices.values.all { (it as String).startsWith("https://") && !(it as String).contains("example.invalid") }) { "Release blocked: all services must use LAN HTTPS URLs" }
+}
+
 val staticIps = Properties().apply { file("static-ips.properties").reader().use { load(it) } }
 staticIps.stringPropertyNames().forEach { rootProject.extra[it] = staticIps.getProperty(it) }
 
@@ -268,42 +285,42 @@ android {
 
     buildConfigField("long", "BUILD_TIMESTAMP", getLastCommitTimestamp() + "L")
     buildConfigField("String", "GIT_HASH", "\"${getGitHash()}\"")
-    buildConfigField("String", "SIGNAL_URL", "\"https://chat.signal.org\"")
-    buildConfigField("String", "STORAGE_URL", "\"https://storage.signal.org\"")
-    buildConfigField("String", "SIGNAL_CDN_URL", "\"https://cdn.signal.org\"")
-    buildConfigField("String", "SIGNAL_CDN2_URL", "\"https://cdn2.signal.org\"")
-    buildConfigField("String", "SIGNAL_CDN3_URL", "\"https://cdn3.signal.org\"")
-    buildConfigField("String", "SIGNAL_CDSI_URL", "\"https://cdsi.signal.org\"")
-    buildConfigField("String", "SIGNAL_SERVICE_STATUS_URL", "\"uptime.signal.org\"")
-    buildConfigField("String", "SIGNAL_SVR2_URL", "\"https://svr2.signal.org\"")
-    buildConfigField("String", "SIGNAL_SFU_URL", "\"https://sfu.voip.signal.org\"")
-    buildConfigField("String", "SIGNAL_STAGING_SFU_URL", "\"https://sfu.staging.voip.signal.org\"")
-    buildConfigField("String[]", "SIGNAL_SFU_INTERNAL_NAMES", "new String[]{\"Test\", \"Staging\", \"Development\"}")
-    buildConfigField("String[]", "SIGNAL_SFU_INTERNAL_URLS", "new String[]{\"https://sfu.test.voip.signal.org\", \"https://sfu.staging.voip.signal.org\", \"https://sfu.staging.test.voip.signal.org\"}")
-    buildConfigField("String", "CONTENT_PROXY_HOST", "\"contentproxy.signal.org\"")
+    buildConfigField("String", "SIGNAL_URL", lanQuoted(lanService("signalApi")))
+    buildConfigField("String", "STORAGE_URL", lanQuoted(lanService("storage")))
+    buildConfigField("String", "SIGNAL_CDN_URL", lanQuoted(lanService("cdn0")))
+    buildConfigField("String", "SIGNAL_CDN2_URL", lanQuoted(lanService("cdn2")))
+    buildConfigField("String", "SIGNAL_CDN3_URL", lanQuoted(lanService("cdn3")))
+    buildConfigField("String", "SIGNAL_CDSI_URL", lanQuoted(lanService("cdsi")))
+    buildConfigField("String", "SIGNAL_SERVICE_STATUS_URL", lanQuoted(java.net.URI(lanService("signalApi")).host))
+    buildConfigField("String", "SIGNAL_SVR2_URL", lanQuoted(lanService("svr2")))
+    buildConfigField("String", "SIGNAL_SFU_URL", lanQuoted(lanService("callingSfu")))
+    buildConfigField("String", "SIGNAL_STAGING_SFU_URL", lanQuoted(lanService("callingSfu")))
+    buildConfigField("String[]", "SIGNAL_SFU_INTERNAL_NAMES", "new String[]{\"LAN\"}")
+    buildConfigField("String[]", "SIGNAL_SFU_INTERNAL_URLS", "new String[]{${lanQuoted(lanService("callingSfu"))}}")
+    buildConfigField("String", "CONTENT_PROXY_HOST", lanQuoted(java.net.URI(lanService("signalApi")).host))
     buildConfigField("int", "CONTENT_PROXY_PORT", "443")
-    buildConfigField("String[]", "SIGNAL_SERVICE_IPS", rootProject.extra["service_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_STORAGE_IPS", rootProject.extra["storage_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_CDN_IPS", rootProject.extra["cdn_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_CDN2_IPS", rootProject.extra["cdn2_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_CDN3_IPS", rootProject.extra["cdn3_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_SFU_IPS", rootProject.extra["sfu_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_CONTENT_PROXY_IPS", rootProject.extra["content_proxy_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_CDSI_IPS", rootProject.extra["cdsi_ips"] as String)
-    buildConfigField("String[]", "SIGNAL_SVR2_IPS", rootProject.extra["svr2_ips"] as String)
+    buildConfigField("String[]", "SIGNAL_SERVICE_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_STORAGE_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_CDN_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_CDN2_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_CDN3_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_SFU_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_CONTENT_PROXY_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_CDSI_IPS", "new String[]{}")
+    buildConfigField("String[]", "SIGNAL_SVR2_IPS", "new String[]{}")
     buildConfigField("String", "SIGNAL_AGENT", "\"OWA\"")
-    buildConfigField("String", "SVR2_MRENCLAVE_LEGACY", "\"ced8217b26228e4b210c985786999d095c4958a94faf37b14acaf25c4cbb02a4\"")
-    buildConfigField("String", "SVR2_MRENCLAVE", "\"fdbbacdc0c043d0d53fe1440f62728de0386f45ab0a275bd8f99e03a02af355e\"")
-    buildConfigField("String[]", "UNIDENTIFIED_SENDER_TRUST_ROOTS", "new String[]{ \"BXu6QIKVz5MA8gstzfOgRQGqyLqOwNKHL6INkv3IHWMF\", \"BUkY0I+9+oPgDCn4+Ac6Iu813yvqkDr/ga8DzLxFxuk6\"}")
-    buildConfigField("String", "ZKGROUP_SERVER_PUBLIC_PARAMS", "\"AMhf5ywVwITZMsff/eCyudZx9JDmkkkbV6PInzG4p8x3VqVJSFiMvnvlEKWuRob/1eaIetR31IYeAbm0NdOuHH8Qi+Rexi1wLlpzIo1gstHWBfZzy1+qHRV5A4TqPp15YzBPm0WSggW6PbSn+F4lf57VCnHF7p8SvzAA2ZZJPYJURt8X7bbg+H3i+PEjH9DXItNEqs2sNcug37xZQDLm7X36nOoGPs54XsEGzPdEV+itQNGUFEjY6X9Uv+Acuks7NpyGvCoKxGwgKgE5XyJ+nNKlyHHOLb6N1NuHyBrZrgtY/JYJHRooo5CEqYKBqdFnmbTVGEkCvJKxLnjwKWf+fEPoWeQFj5ObDjcKMZf2Jm2Ae69x+ikU5gBXsRmoF94GXTLfN0/vLt98KDPnxwAQL9j5V1jGOY8jQl6MLxEs56cwXN0dqCnImzVH3TZT1cJ8SW1BRX6qIVxEzjsSGx3yxF3suAilPMqGRp4ffyopjMD1JXiKR2RwLKzizUe5e8XyGOy9fplzhw3jVzTRyUZTRSZKkMLWcQ/gv0E4aONNqs4P+NameAZYOD12qRkxosQQP5uux6B2nRyZ7sAV54DgFyLiRcq1FvwKw2EPQdk4HDoePrO/RNUbyNddnM/mMgj4FW65xCoT1LmjrIjsv/Ggdlx46ueczhMgtBunx1/w8k8V+l8LVZ8gAT6wkU5J+DPQalQguMg12Jzug3q4TbdHiGCmD9EunCwOmsLuLJkz6EcSYXtrlDEnAM+hicw7iergYLLlMXpfTdGxJCWJmP4zqUFeTTmsmhsjGBt7NiEB/9pFFEB3pSbf4iiUukw63Eo8Aqnf4iwob6X1QviCWuc8t0LUlT9vALgh/f2DPVOOmR0RW6bgRvc7DSF20V/omg+YBw==\"")
-    buildConfigField("String", "GENERIC_SERVER_PUBLIC_PARAMS", "\"AeCO67P9mIv1yUHkdeZ9JF789GDbox61GvTqq3S4kYc1ADUWxWHQygU390tv1oRWt9WjkdZlU7mKkifF59ftjE+2ZlMmxns6I+ySiLpR8FEmfu+TGpVp3zYTjNV93obJJTyBCCsSHVETCyQRbKdCyb5TMa6LGrvcZaX0Q/VAavhuNA/m4kSiRMgSnYrUjGhVekdDnF+7xioo4wvFnxjIDh7uJQrYOWD6MloNGX7St5gbysTuQQ7i/HI38b9V8x8mKazuDSXxB//BKGZx/XHkK8cHX+QK1MPxYUVM1/CBI5oW\"")
-    buildConfigField("String", "BACKUP_SERVER_PUBLIC_PARAMS", "\"AZwNSU55fsFCbgaxGRD11wO1juAs8Yr5GF8FPlGzzvdJJIKH5/4CC7ZJSOe3yL2vturVaRU2Cx0n751Vt8wkj1Y4pyiScu0/S10n647ipo+iq97JZQv+UOlwH8ThyNlGT5DfxXCwTqivxHuXvZpuezPgHk5Gxl5aC6xuNxOnwmFlmu4CeSgdhW8+Pp0vAJOQ1MsU2D0+/kzI+tU94nB3tybY/Ao1AcGW2q41uKQbnOJUWwmQaFT6s+xTISgzsg7CPox6oORGX8rnyk/9lic3DbGsUHctIVpMAl/ogJBb4aYC\"")
+    buildConfigField("String", "SVR2_MRENCLAVE_LEGACY", lanQuoted(lanCryptoValue("svr2MrEnclave")))
+    buildConfigField("String", "SVR2_MRENCLAVE", lanQuoted(lanCryptoValue("svr2MrEnclave")))
+    buildConfigField("String[]", "UNIDENTIFIED_SENDER_TRUST_ROOTS", "new String[]{${(lanCrypto["unidentifiedSenderTrustRoots"] as List<*>).joinToString(",") { lanQuoted(it as String) }}}")
+    buildConfigField("String", "ZKGROUP_SERVER_PUBLIC_PARAMS", lanQuoted(lanCryptoValue("zkGroupServerPublicParams")))
+    buildConfigField("String", "GENERIC_SERVER_PUBLIC_PARAMS", lanQuoted(lanCryptoValue("genericServerPublicParams")))
+    buildConfigField("String", "BACKUP_SERVER_PUBLIC_PARAMS", lanQuoted(lanCryptoValue("backupServerPublicParams")))
     buildConfigField("String[]", "LANGUAGES", "new String[]{ ${languagesForBuildConfigProvider.get()} }")
     buildConfigField("int", "CANONICAL_VERSION_CODE", "$canonicalVersionCode")
     buildConfigField("String", "DEFAULT_CURRENCIES", "\"EUR,AUD,GBP,CAD,CNY\"")
-    buildConfigField("String", "GIPHY_API_KEY", "\"3o6ZsYH6U6Eri53TXy\"")
-    buildConfigField("String", "SIGNAL_CAPTCHA_URL", "\"https://signalcaptchas.org/registration/generate.html\"")
-    buildConfigField("String", "RECAPTCHA_PROOF_URL", "\"https://signalcaptchas.org/challenge/generate.html\"")
+    buildConfigField("String", "GIPHY_API_KEY", lanQuoted(""))
+    buildConfigField("String", "SIGNAL_CAPTCHA_URL", lanQuoted(lanService("signalApi") + "/disabled-captcha"))
+    buildConfigField("String", "RECAPTCHA_PROOF_URL", lanQuoted(lanService("signalApi") + "/disabled-captcha"))
     buildConfigField("String", "WEBAUTHN_RP_ID", "\"login.signal.org\"")
     buildConfigField("org.signal.libsignal.net.Network.Environment", "LIBSIGNAL_NET_ENV", "org.signal.libsignal.net.Network.Environment.PRODUCTION")
     buildConfigField("int", "LIBSIGNAL_LOG_LEVEL", "org.signal.libsignal.protocol.logging.SignalProtocolLogger.INFO")
@@ -311,8 +328,8 @@ android {
     buildConfigField("String", "BUILD_DISTRIBUTION_TYPE", "\"unset\"")
     buildConfigField("String", "BUILD_ENVIRONMENT_TYPE", "\"unset\"")
     buildConfigField("String", "BUILD_VARIANT_TYPE", "\"unset\"")
-    buildConfigField("String", "BADGE_STATIC_ROOT", "\"https://updates2.signal.org/static/badges/\"")
-    buildConfigField("String", "STRIPE_BASE_URL", "\"https://api.stripe.com/v1\"")
+    buildConfigField("String", "BADGE_STATIC_ROOT", lanQuoted(lanService("signalApi") + "/static/badges/"))
+    buildConfigField("String", "STRIPE_BASE_URL", lanQuoted(lanService("signalApi") + "/disabled-payments"))
     buildConfigField("String", "STRIPE_PUBLISHABLE_KEY", "\"pk_live_6cmGZopuTsV8novGgJJW9JpC00vLIgtQ1D\"")
     buildConfigField("boolean", "TRACING_ENABLED", "false")
     buildConfigField("boolean", "LINK_DEVICE_UX_ENABLED", "false")
@@ -348,7 +365,6 @@ android {
       isMinifyEnabled = false
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
-        "proguard/proguard-firebase-messaging.pro",
         "proguard/proguard-google-play-services.pro",
         "proguard/proguard-jackson.pro",
         "proguard/proguard-sqlite.pro",

@@ -82,6 +82,32 @@ class AccountApiV2(private val authWebSocket: SignalWebSocket.AuthenticatedWebSo
   }
 
   /**
+   * Provision the authenticated handset's private ntfy wake-up topic on the
+   * self-hosted Signal Server. No publisher/admin credentials enter the APK.
+   * An unauthorized or revoked Signal device cannot obtain a topic.
+   */
+  suspend fun registerNtfyTopic(): RequestResult<String, Nothing> {
+    return authWebSocket.requestResult(
+      request = WebSocketRequestMessage.put("/v1/accounts/ntfy", ByteArray(0)),
+      parseSuccess = { response ->
+        val value = org.json.JSONObject(String(response.body, Charsets.UTF_8)).getString("topic")
+        require(Regex("^signal-[A-Za-z0-9_-]{32,64}$").matches(value)) { "Invalid ntfy topic format" }
+        value
+      },
+      mapError = { null }
+    )
+  }
+
+  /** Revoke the current device's ntfy topic when notifications are disabled. */
+  suspend fun revokeNtfyTopic(): RequestResult<Unit, Nothing> {
+    return authWebSocket.requestResult(
+      request = WebSocketRequestMessage.delete("/v1/accounts/ntfy"),
+      parseSuccess = { },
+      mapError = { null }
+    )
+  }
+
+  /**
    * Sets the FCM push token the server should use to notify this device of new messages.
    */
   suspend fun setFcmToken(fcmToken: String): RequestResult<Unit, Nothing> {

@@ -70,6 +70,7 @@ import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionC
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionResult
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
 import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
+import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.viewmodel.SvrAuthCredentialSet
 import org.thoughtcrime.securesms.service.DirectoryRefreshListener
 import org.thoughtcrime.securesms.service.RotateSignedPreKeyListener
@@ -109,9 +110,7 @@ object RegistrationRepository {
   /**
    * Retrieve the FCM token from the Firebase service.
    */
-  suspend fun getFcmToken(context: Context): String? = withContext(Dispatchers.Default) {
-    FcmUtil.getToken(context).orElse(null)
-  }
+  suspend fun getFcmToken(context: Context): String? = null
 
   /**
    * Queries, and creates if needed, the local registration ID.
@@ -289,11 +288,8 @@ object RegistrationRepository {
     metadataStore.lastResortKyberPreKeyRotationTime = System.currentTimeMillis()
   }
 
-  fun canUseLocalRecoveryPassword(): Boolean {
-    val recoveryPassword = SignalStore.svr.recoveryPassword
-    val pinHash = SignalStore.svr.localPinHash
-    return recoveryPassword != null && pinHash != null
-  }
+  // Re-registration is always gated by the same signed local device challenge.
+  fun canUseLocalRecoveryPassword(): Boolean = false
 
   fun doesPinMatchLocalHash(pin: String): Boolean {
     val pinHash = SignalStore.svr.localPinHash ?: throw IllegalStateException("Local PIN hash is not present!")
@@ -310,35 +306,28 @@ object RegistrationRepository {
    * Validates a session ID.
    */
   private suspend fun validateSession(context: Context, sessionId: String, e164: String, password: String): RegistrationSessionCheckResult = withContext(Dispatchers.IO) {
-    val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
-    Log.d(TAG, "Validating registration session with service.")
-    val registrationSessionResult = api.getRegistrationSessionStatus(sessionId)
-    return@withContext RegistrationSessionCheckResult.from(registrationSessionResult)
+    val auth = LocalDeviceAuthClient(context)
+    if (auth.isChallengeSession(sessionId) || auth.isCompletedSession(sessionId)) {
+      return@withContext RegistrationSessionCheckResult.Success(
+        sessionId, 0.seconds, 0.seconds, 0.seconds,
+        auth.isChallengeSession(sessionId), emptyList(), auth.isCompletedSession(sessionId)
+      )
+    }
+    RegistrationSessionCheckResult.SessionNotFound(SecurityException("Only enrolled LAN sessions are accepted"))
   }
 
   /**
    * Initiates a new registration session on the service.
    */
   suspend fun createSession(context: Context, e164: String, password: String, mcc: String?, mnc: String?): RegistrationSessionCreationResult = withContext(Dispatchers.IO) {
-    Log.d(TAG, "About to create a registration session…")
-    val fcmToken: String? = FcmUtil.getToken(context).orElse(null)
-    val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
-
-    val registrationSessionResult = if (fcmToken == null) {
-      Log.d(TAG, "Creating registration session without FCM token.")
-      api.createRegistrationSession(null, mcc, mnc)
-    } else {
-      Log.d(TAG, "Creating registration session with FCM token.")
-      createSessionAndBlockForPushChallenge(api, fcmToken, mcc, mnc)
-    }
-    val result = RegistrationSessionCreationResult.from(registrationSessionResult)
-    if (result is RegistrationSessionCreationResult.Success) {
-      Log.d(TAG, "Updating registration session and E164 in value store.")
-      SignalStore.registration.sessionId = result.sessionId
+    try {
+      val metadata = LocalDeviceAuthClient(context).createSession(e164)
+      SignalStore.registration.sessionId = metadata.id
       SignalStore.registration.sessionE164 = e164
+      RegistrationSessionCreationResult.Success(metadata.id, 0.seconds, 0.seconds, 0.seconds, true, emptyList(), false)
+    } catch (e: Exception) {
+      RegistrationSessionCreationResult.UnknownError(e)
     }
-
-    return@withContext result
   }
 
   /**
@@ -378,43 +367,43 @@ object RegistrationRepository {
    * Asks the service to send a verification code through one of our supported channels (SMS, phone call).
    */
   suspend fun requestSmsCode(context: Context, sessionId: String, e164: String, password: String, mode: E164VerificationMode): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
-    val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
-
-    val codeRequestResult = api.requestSmsVerificationCode(sessionId, Locale.getDefault(), mode.isSmsRetrieverSupported, mode.transport)
-
-    return@withContext VerificationCodeRequestResult.from(codeRequestResult)
+    try {
+      val metadata = LocalDeviceAuthClient(context).requestCode(sessionId)
+      VerificationCodeRequestResult.Success(metadata.id, 0.seconds, 0.seconds, 0.seconds, false, emptyList(), false)
+    } catch (e: Exception) {
+      VerificationCodeRequestResult.UnknownError(e)
+    }
   }
 
   /**
    * Submits the user-entered verification code to the service.
    */
   suspend fun submitVerificationCode(context: Context, sessionId: String, registrationData: RegistrationData): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
-    val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, registrationData.e164, SignalServiceAddress.DEFAULT_DEVICE_ID, registrationData.password).registrationApi
-    val result = api.verifyAccount(sessionId = sessionId, verificationCode = registrationData.code)
-    return@withContext VerificationCodeRequestResult.from(result)
+    try {
+      val metadata = LocalDeviceAuthClient(context).complete(sessionId, registrationData.code)
+      VerificationCodeRequestResult.Success(metadata.id, 0.seconds, 0.seconds, 0.seconds, false, emptyList(), true)
+    } catch (e: Exception) {
+      VerificationCodeRequestResult.UnknownError(e)
+    }
   }
 
   /**
    * Submits the solved captcha token to the service.
    */
-  suspend fun submitCaptchaToken(context: Context, e164: String, password: String, sessionId: String, captchaToken: String): VerificationCodeRequestResult = withContext(Dispatchers.IO) {
-    val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
-    val captchaSubmissionResult = api.submitCaptchaToken(sessionId = sessionId, captchaToken = captchaToken)
-    return@withContext VerificationCodeRequestResult.from(captchaSubmissionResult)
-  }
+  suspend fun submitCaptchaToken(context: Context, e164: String, password: String, sessionId: String, captchaToken: String): VerificationCodeRequestResult =
+    VerificationCodeRequestResult.UnknownError(SecurityException("CAPTCHA is not an allowed LAN authorization factor"))
 
-  suspend fun requestAndVerifyPushToken(context: Context, sessionId: String, e164: String, password: String) = withContext(Dispatchers.IO) {
-    val fcmToken = getFcmToken(context)
-    val accountManager = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password)
-    val pushChallenge = PushChallengeRequest.getPushChallengeBlocking(accountManager, sessionId, Optional.ofNullable(fcmToken), PUSH_REQUEST_TIMEOUT).orElse(null)
-    val pushSubmissionResult = accountManager.registrationApi.submitPushChallengeToken(sessionId = sessionId, pushChallengeToken = pushChallenge)
-    return@withContext VerificationCodeRequestResult.from(pushSubmissionResult)
-  }
+  suspend fun requestAndVerifyPushToken(context: Context, sessionId: String, e164: String, password: String): VerificationCodeRequestResult =
+    VerificationCodeRequestResult.UnknownError(SecurityException("FCM push challenge is disabled in LAN-only mode"))
+
 
   /**
    * Submit the necessary assets as a verified account so that the user can actually use the service.
    */
   suspend fun registerAccount(context: Context, sessionId: String?, registrationData: RegistrationData, pin: String? = null, masterKeyProducer: MasterKeyProducer? = null): RegisterAccountResult = withContext(Dispatchers.IO) {
+    if (sessionId == null || !LocalDeviceAuthClient(context).isCompletedSession(sessionId)) {
+      return@withContext RegisterAccountResult.UnknownError(SecurityException("Administrator-approved device ticket is required"))
+    }
     Log.v(TAG, "registerAccount()")
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, registrationData.e164, SignalServiceAddress.DEFAULT_DEVICE_ID, registrationData.password).registrationApi
 
@@ -457,7 +446,7 @@ object RegistrationRepository {
     val aciPreKeyCollection = generateSignedAndLastResortPreKeys(aciIdentity, SignalStore.account.aciPreKeys)
     val pniPreKeyCollection = generateSignedAndLastResortPreKeys(pniIdentity, SignalStore.account.pniPreKeys)
 
-    val result: NetworkResult<AccountRegistrationResult> = api.registerAccount(sessionId, registrationData.recoveryPassword, accountAttributes, aciPreKeyCollection, pniPreKeyCollection, registrationData.fcmToken, true)
+    val result: NetworkResult<AccountRegistrationResult> = api.registerAccount(sessionId, null, accountAttributes, aciPreKeyCollection, pniPreKeyCollection, null, true)
       .map { accountRegistrationResponse: VerifyAccountResponse ->
         AccountRegistrationResult(
           uuid = accountRegistrationResponse.uuid!!,

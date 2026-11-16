@@ -75,6 +75,7 @@ import org.thoughtcrime.securesms.dependencies.AppDependencies;
 import org.thoughtcrime.securesms.dependencies.AppRemoteConfigDependencies;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencyProvider;
 import org.thoughtcrime.securesms.gcm.FcmFetchManager;
+import org.thoughtcrime.securesms.push.NtfyPushService;
 import org.thoughtcrime.securesms.glide.SignalGlideComponents;
 import org.thoughtcrime.securesms.jobmanager.impl.SealedSenderConstraint;
 import org.thoughtcrime.securesms.jobs.AccountConsistencyWorkerJob;
@@ -290,6 +291,9 @@ public class ApplicationContext extends Application implements AppForegroundObse
     AppDependencies.getDeadlockDetector().start();
     InAppPaymentKeepAliveJob.enqueueAndTrackTimeIfNecessary();
     FcmFetchManager.onForeground(this);
+    if (SignalStore.account().isRegistered()) {
+      NtfyPushService.start(this);
+    }
     startAnrDetector();
 
     SignalExecutors.BOUNDED.execute(() -> {
@@ -499,38 +503,11 @@ public class ApplicationContext extends Application implements AppForegroundObse
   }
 
   private void initializeFcmCheck() {
-    if (!SignalStore.account().isRegistered()) {
-      return;
-    }
-
-    PlayServicesUtil.PlayServicesStatus playServicesStatus = PlayServicesUtil.getPlayServicesStatus(this);
-
-    if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.SUCCESS && !SignalStore.account().isFcmEnabled()) {
-      Log.w(TAG, "Play Services are newly-available. Enabling FCM and updating server.");
-      SignalStore.account().setFcmEnabled(true);
-      AppDependencies.getJobManager().startChain(new FcmRefreshJob())
-                                      .then(new RefreshAttributesJob())
-                                      .enqueue();
-      AppDependencies.resetNetwork();
-      AppDependencies.startNetwork();
-      IncomingMessageObserver.stopForegroundService(this);
-    } else if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.MISSING && SignalStore.account().isFcmEnabled()) {
-      Log.w(TAG, "Play Services are no longer available. Attempting to get an FCM token anyway.");
-      AppDependencies.getJobManager().add(new FcmRefreshJob());
-    } else if (playServicesStatus == PlayServicesUtil.PlayServicesStatus.MISSING && (System.currentTimeMillis() - SignalStore.misc().getLastMissingPlayServicesFcmVerificationTime()) > TimeUnit.DAYS.toMillis(3)) {
-      Log.i(TAG, "Play Services are unavailable, but it's been long enough that we should check and see if we can get an FCM token anyway.");
-      AppDependencies.getJobManager().add(new FcmRefreshJob());
-    } else if (SignalStore.account().isFcmEnabled()) {
-      long lastSetTime = SignalStore.account().getFcmTokenLastSetTime();
-      long nextSetTime = lastSetTime + TimeUnit.HOURS.toMillis(6);
-      long now         = System.currentTimeMillis();
-
-      if (SignalStore.account().getFcmToken() == null || nextSetTime <= now || lastSetTime > now) {
-        Log.i(TAG, "Time for routine FCM token refresh.");
-        AppDependencies.getJobManager().add(new FcmRefreshJob());
-      }
-    } else {
-      Log.d(TAG, "Play Services status: " + playServicesStatus + ", fcmEnabled: false. Skipping FCM check.");
+    // Disable all upstream Firebase token refreshes. This runs after storage
+    // initialization; ntfy is started at foreground/boot/registration.
+    SignalStore.account().setFcmEnabled(false);
+    if (SignalStore.account().isRegistered()) {
+      NtfyPushService.start(this);
     }
   }
 

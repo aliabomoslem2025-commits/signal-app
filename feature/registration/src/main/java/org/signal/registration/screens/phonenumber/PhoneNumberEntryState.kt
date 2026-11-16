@@ -73,6 +73,7 @@ data class PhoneNumberEntryState(
     val confirmNumber: Boolean = false,
     val networkError: Boolean = false,
     val unknownError: Boolean = false,
+    val unauthorizedDevice: Boolean = false,
     /** When non-null, shows a rate limit error dialog. A non-positive duration indicates the server didn't say how long to wait. */
     val rateLimitedRetryAfter: Duration? = null,
     val unableToSendSms: Boolean = false,

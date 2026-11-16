@@ -9,9 +9,6 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -73,8 +70,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
-import com.google.android.gms.auth.api.identity.Identity
 import com.google.i18n.phonenumbers.PhoneNumberUtil
 import org.signal.core.ui.compose.AllDevicePreviews
 import org.signal.core.ui.compose.Buttons
@@ -143,44 +138,14 @@ fun PhoneNumberScreen(
     }
   }
 
-  val phoneNumberHintLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-    val phoneNumber = try {
-      Identity.getSignInClient(context).getPhoneNumberFromIntent(result.data)
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to retrieve phone number from hint.", e)
-      null
-    }
-
-    if (phoneNumber != null) {
-      onEvent(PhoneNumberEntryScreenEvents.FullPhoneNumberEntered(phoneNumber, autoConfirm = true))
-    }
-  }
-
+  // No Google Play Services phone-number picker in the isolated LAN build.
+  // Telephony autofill is a convenience only, never a SIM ownership proof.
   LaunchedEffect(state.initialized) {
     if (!state.initialized || hasRequestedPhoneNumberHint || state.nationalNumber.isNotEmpty() || state.preExistingRegistrationData != null) {
       return@LaunchedEffect
     }
     hasRequestedPhoneNumberHint = true
-
-    try {
-      Identity.getSignInClient(context)
-        .getPhoneNumberHintIntent(GetPhoneNumberHintIntentRequest.builder().build())
-        .addOnSuccessListener { pendingIntent ->
-          try {
-            phoneNumberHintLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
-          } catch (e: Exception) {
-            Log.w(TAG, "Failed to launch phone number hint intent.", e)
-            prefillFromDeviceNumberIfAllowed()
-          }
-        }
-        .addOnFailureListener { e ->
-          Log.w(TAG, "Phone number hint unavailable. Falling back to device number.", e)
-          prefillFromDeviceNumberIfAllowed()
-        }
-    } catch (e: Exception) {
-      Log.w(TAG, "Unable to request phone number hint. Falling back to device number.", e)
-      prefillFromDeviceNumberIfAllowed()
-    }
+    prefillFromDeviceNumberIfAllowed()
   }
 
   if (state.dialogs.confirmNumber) {
@@ -204,6 +169,7 @@ fun PhoneNumberScreen(
       }
       message to PhoneNumberEntryScreenEvents.RateLimitedDialogDismissed
     }
+    state.dialogs.unauthorizedDevice -> stringResource(R.string.LanRegistration__unauthorized_device) to PhoneNumberEntryScreenEvents.UnauthorizedDeviceDialogDismissed
     state.dialogs.unknownError -> stringResource(R.string.VerificationCodeScreen__an_unexpected_error_occurred) to PhoneNumberEntryScreenEvents.UnknownErrorDialogDismissed
     state.dialogs.couldNotRequestCodeWithSelectedTransport -> stringResource(R.string.VerificationCodeScreen__could_not_send_code_via_selected_method) to PhoneNumberEntryScreenEvents.CouldNotRequestCodeWithSelectedTransportDialogDismissed
     state.dialogs.unableToSendSms -> stringResource(R.string.VerificationCodeScreen__unable_to_send_sms) to PhoneNumberEntryScreenEvents.UnableToSendSmsDialogDismissed
@@ -388,6 +354,15 @@ fun TopAppBar(
           text = { Text(text = stringResource(R.string.RegistrationActivity_use_proxy)) },
           onClick = {
             RegistrationDependencies.get().proxyConfigCallback?.invoke(context)
+            menuController.hide()
+          }
+        )
+        DropdownMenus.Item(
+          text = { Text(text = stringResource(R.string.LanRegistration__local_server_setup)) },
+          onClick = {
+            context.startActivity(
+              Intent().setClassName(context.packageName, "org.thoughtcrime.securesms.registration.local.LocalServerSettingsActivity")
+            )
             menuController.hide()
           }
         )
