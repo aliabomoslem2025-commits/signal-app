@@ -71,6 +71,9 @@ sealed class PhoneNumberEntryScreenEvents {
   /** The user dismissed the network error dialog. */
   data object NetworkErrorDialogDismissed : PhoneNumberEntryScreenEvents()
 
+  /** The user dismissed the unauthorized handset dialog. */
+  data object UnauthorizedDeviceDialogDismissed : PhoneNumberEntryScreenEvents()
+
   /** The user dismissed the unknown error dialog. */
   data object UnknownErrorDialogDismissed : PhoneNumberEntryScreenEvents()
 
