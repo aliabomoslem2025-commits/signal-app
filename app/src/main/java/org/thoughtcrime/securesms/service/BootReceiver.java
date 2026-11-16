@@ -6,11 +6,16 @@ import android.content.Intent;
 
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
 import org.thoughtcrime.securesms.jobs.MessageFetchJob;
+import org.thoughtcrime.securesms.push.NtfyPushService;
+import org.thoughtcrime.securesms.keyvalue.SignalStore;
 
 public class BootReceiver extends BroadcastReceiver {
 
   @Override
   public void onReceive(Context context, Intent intent) {
     AppDependencies.getJobManager().add(new MessageFetchJob());
+    if (SignalStore.account().isRegistered()) {
+      NtfyPushService.start(context);
+    }
   }
 }
