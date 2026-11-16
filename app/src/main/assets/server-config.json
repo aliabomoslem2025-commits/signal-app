@@ -1,0 +1,23 @@
+{
+  "mode": "LOCAL_LAN",
+  "localAuthOnly": true,
+  "services": {
+    "signalApi": "https://signal.lan",
+    "localAuthApi": "https://auth.lan",
+    "ntfy": "https://ntfy.lan",
+    "cdn0": "https://cdn.lan",
+    "cdn2": "https://cdn2.lan",
+    "cdn3": "https://cdn3.lan",
+    "storage": "https://storage.lan",
+    "cdsi": "https://cdsi.lan",
+    "svr2": "https://svr2.lan",
+    "callingSfu": "https://calling.lan",
+    "tus": "https://uploads.lan"
+  },
+  "security": {
+    "requireHttps": true,
+    "allowCleartext": false,
+    "validateCertificates": true,
+    "trustedCaPem": ""
+  }
+}
