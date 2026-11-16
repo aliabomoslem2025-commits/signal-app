@@ -50,8 +50,15 @@ controller = read("app/src/main/java/org/thoughtcrime/securesms/registration/v2/
 ntfy = read("app/src/main/java/org/thoughtcrime/securesms/push/NtfyPushService.kt")
 for value in ("signCompletion(", '"signature", signature', "LanDeviceNotAuthorizedException", "/v1/local-auth/complete"):
     check(value in client, f"Missing signed two-factor completion: {value}")
-for value in ("AndroidKeyStore", "SHA256withECDSA", "signal-local-auth-v1", "signal-local-auth-complete-v1"):
+for value in ("AndroidKeyStore", "SHA256withECDSA", "LocalDeviceAuthCanonical.challenge(", "LocalDeviceAuthCanonical.completion("):
     check(value in key, f"Missing Keystore proof {value}")
+canonical = read("app/src/main/java/org/thoughtcrime/securesms/registration/local/LocalDeviceAuthCanonical.kt")
+for value in ("signal-local-auth-v1", "signal-local-auth-complete-v1", "Invalid E.164 number", "Invalid activation code"):
+    check(value in canonical, f"Missing canonical activation proof {value}")
+check("libs.firebase.messaging" not in read("demo/registration/build.gradle.kts"), "The registration demo must not reintroduce Firebase")
+demo_manifest = read("demo/registration/src/main/AndroidManifest.xml")
+check("com.google.firebase" not in demo_manifest, "The registration demo manifest still declares Firebase")
+check("persistCursor(topic, eventId)" in ntfy and "loadCursor(topic)" in ntfy, "ntfy should resume from persisted SSE message ID after restart")
 check("localAuth.isCompletedSession(sessionId)" in controller, "Registration must verify completed signed session")
 check("registerNtfyTopic()" in ntfy and "MessageFetchJob()" in ntfy, "ntfy must receive opaque wake and fetch Signal messages")
 check("FirebaseMessaging" not in ntfy and "FirebaseApp" not in ntfy, "ntfy must not depend on Firebase")

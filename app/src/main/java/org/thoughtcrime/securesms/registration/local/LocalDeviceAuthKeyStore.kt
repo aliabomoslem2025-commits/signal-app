@@ -45,18 +45,16 @@ class LocalDeviceAuthKeyStore(private val context: Context) {
     return "-----BEGIN PUBLIC KEY-----\n$bytes\n-----END PUBLIC KEY-----"
   }
 
-  private fun sign(message: String): String {
+  private fun sign(message: ByteArray): String {
     val signature = Signature.getInstance("SHA256withECDSA")
     signature.initSign(getOrCreateKeyPair().private)
-    signature.update(message.toByteArray(Charsets.UTF_8))
+    signature.update(message)
     return Base64.encodeToString(signature.sign(), Base64.NO_WRAP)
   }
 
   fun signChallenge(id: String, phone: String, nonce: String): String =
-    sign("signal-local-auth-v1\n$id\n$phone\n$nonce")
+    sign(LocalDeviceAuthCanonical.challenge(id, phone, nonce))
 
-  fun signCompletion(id: String, phone: String, nonce: String, code: String): String {
-    require(code.length == 6 && code.all { it in '0'..'9' })
-    return sign("signal-local-auth-complete-v1\n$id\n$phone\n$nonce\n$code")
-  }
+  fun signCompletion(id: String, phone: String, nonce: String, code: String): String =
+    sign(LocalDeviceAuthCanonical.completion(id, phone, nonce, code))
 }
