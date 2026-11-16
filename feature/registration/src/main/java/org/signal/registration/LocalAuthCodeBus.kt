@@ -9,21 +9,21 @@ import kotlinx.coroutines.flow.filterNotNull
  */
 object LocalAuthCodeBus {
   const val CHALLENGE_SESSION_PREFIX = "LOCAL1."
-  data class Code(val sessionId: String, val value: String)
+  data class Code(val sessionId: String, val value: String, val passwordSetupRequired: Boolean)
 
   private val state = MutableStateFlow<Code?>(null)
   val events = state.filterNotNull()
 
   @Synchronized
-  fun publish(sessionId: String, code: String) {
+  fun publish(sessionId: String, code: String, passwordSetupRequired: Boolean) {
     require(sessionId.startsWith(CHALLENGE_SESSION_PREFIX))
     require(code.length == 6 && code.all { it in '0'..'9' })
-    state.value = Code(sessionId, code)
+    state.value = Code(sessionId, code, passwordSetupRequired)
   }
 
   @Synchronized
   fun consume(sessionId: String, code: String) {
-    if (state.value == Code(sessionId, code)) {
+    if (state.value?.sessionId == sessionId && state.value?.value == code) {
       state.value = null
     }
   }
