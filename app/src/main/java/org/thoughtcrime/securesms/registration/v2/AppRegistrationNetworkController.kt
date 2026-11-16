@@ -37,7 +37,6 @@ import org.signal.libsignal.zkgroup.receipts.ReceiptSerial
 import org.signal.network.NetworkResult
 import org.signal.network.api.ArchiveApiV2
 import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
-import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.signal.network.api.RegistrationApiV2
 import org.signal.network.api.RegistrationApiV2.AccountAttributes
 import org.signal.network.api.RegistrationApiV2.CheckSvrCredentialsError
@@ -143,6 +142,8 @@ class AppRegistrationNetworkController(
 ) : NetworkController {
 
   private val localAuth by lazy { LocalDeviceAuthClient(context) }
+
+  override fun isLocalAuthEnabled(): Boolean = true
 
   companion object {
     private val TAG = Log.tag(AppRegistrationNetworkController::class)
