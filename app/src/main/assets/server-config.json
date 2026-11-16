@@ -19,5 +19,12 @@
     "allowCleartext": false,
     "validateCertificates": true,
     "trustedCaPem": ""
+  },
+  "crypto": {
+    "zkGroupServerPublicParams": "",
+    "genericServerPublicParams": "",
+    "backupServerPublicParams": "",
+    "svr2MrEnclave": "",
+    "unidentifiedSenderTrustRoots": []
   }
 }
