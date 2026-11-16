@@ -42,11 +42,8 @@ class ChangeNumberConfirmFragment : LoggingFragment(R.layout.fragment_change_num
     editNumber.setOnClickListener { findNavController().navigateUp() }
 
     val changeNumber: View = view.findViewById(R.id.change_number_confirm_change_number)
-    changeNumber.setOnClickListener {
-      viewModel.registerSmsListenerWithCompletionListener(requireContext()) {
-        navigateToVerify(it)
-      }
-    }
+    // The approved-device LAN flow cannot use Play Services SMS retrieval.
+    changeNumber.setOnClickListener { navigateToVerify(false) }
   }
 
   private fun navigateToVerify(smsListenerEnabled: Boolean = false) {

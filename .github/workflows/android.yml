@@ -6,7 +6,6 @@ on:
     branches:
     - 'main'
     - '8.**'
-    - 'feat/lan-device-auth-ntfy-rebuild'
   workflow_dispatch:
 
 # Avoid concurrent full Gradle builds for every intermediate LAN repair commit.

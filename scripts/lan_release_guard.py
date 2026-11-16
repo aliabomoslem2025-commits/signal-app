@@ -78,6 +78,11 @@ check("instanceFollowRedirects = false" in ntfy, "ntfy SSE subscriber must not f
 gradle = read("app/build.gradle.kts")
 check("lanDocument" in gradle and "Release blocked" in gradle, "Gradle must read LAN JSON and block unconfigured releases")
 check("libs.firebase.messaging" not in gradle, "Firebase Messaging runtime dependency must be removed")
+legacyRegistration = read("app/src/main/java/org/thoughtcrime/securesms/registration/data/RegistrationRepository.kt")
+check("SmsRetriever.getClient(" not in legacyRegistration, "Legacy LAN verification must not start Google SMS retriever")
+newNavigation = read("feature/registration/src/main/java/org/signal/registration/RegistrationNavigation.kt")
+check("smsCodeEvents = if (registrationRepository.isLocalAuthEnabled()) emptyFlow()" in newNavigation, "LAN verification must not subscribe to SMS retrieval broadcast")
+
 check("FirebaseTestLabTask" not in gradle, "Firebase Test Lab and gcloud integrations are not allowed in isolated LAN builds")
 for deprecated in ("app/src/main/res/values/firebase_messaging.xml", "app/proguard/proguard-firebase-messaging.pro"):
     check(not (root / deprecated).exists(), f"Remove stale Firebase configuration from APK/build: {deprecated}")
