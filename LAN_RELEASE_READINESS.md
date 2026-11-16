@@ -75,6 +75,17 @@
    The Gradle Release gate intentionally fails with empty CA or crypto
    fields; this is correct and must not be bypassed.
 
+## Admin-visible device info (QR, copy and share)
+
+On the pre-registration phone-entry screen, tap **ⓘ**. The app displays a
+locally rendered (offline ZXing) QR code containing JSON with `formatVersion:1`,
+`androidId`, and `publicKeyPem`. The Android ID is displayed immediately
+below the QR, with buttons to copy just the ID, copy the full public enrollment
+JSON, or share it with the administrator. No private Keystore key is exported.
+LAN registration never probes the SIM or carrier to prefill a phone number.
+Changing ANDROID_ID or restoring a factory-reset device requires admin
+re-enrollment; it is not a perpetual hardware identity.
+
 ## How to enroll the first handset
 
 From the pre-login phone-number screen open the overflow menu and select
