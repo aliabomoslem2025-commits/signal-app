@@ -11,6 +11,12 @@
 - **No phone-number self-registration**. The number is created by a
   dashboard admin, who must explicitly enroll the Android handset's
   Android ID and P-256 public key. The private key remains in Android Keystore.
+- **Mandatory local password factor:** after the local activation code auto-fills,
+  the app requires a user-created password with confirmation on the first
+  registration, and the existing password on every subsequent registration.
+  The Go sidecar stores only a salted Argon2id hash and refuses to issue the
+  signed one-time ticket without successful password validation. The
+  administrator sees whether password setup is complete, not the password.
 - The app requests a challenge from the Go local-auth service, signs it
   and receives a short-lived six-digit activation code **over private HTTPS,
   not via SMS**. The completion also requires the same Keystore key to sign
@@ -101,6 +107,9 @@ to an isolated LAN with WAN blocked:
 | Unknown phone number or B types A's number | No challenge/code; same generic unauthorized UI |
 | B spoofs A's Android ID | Different Keystore private key fails ECDSA verification |
 | B observes/copies A's activation code | Second ECDSA completion proof fails |
+| A's first sign-in after local activation | User must create and confirm a personal password |
+| A signs out and signs in again | Device approval, auto-filled code and personal password are all required |
+| A uses the wrong password five times | Challenge is rejected; new activation required |
 | Admin revokes A, enrolls B | Old challenges, tickets and new activation rejected |
 | Two devices send encrypted text/groups/reactions/receipts | Normal E2E Signal delivery, no data in ntfy |
 | App background, Wi-Fi loss, airplane mode, reboot, Doze | Automatic ntfy reconnect or documented OS limitation |
