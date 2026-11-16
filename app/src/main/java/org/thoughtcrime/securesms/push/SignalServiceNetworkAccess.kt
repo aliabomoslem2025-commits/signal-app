@@ -1,13 +1,8 @@
 package org.thoughtcrime.securesms.push
 
 import android.content.Context
-import android.os.SystemClock
-import com.google.i18n.phonenumbers.PhoneNumberUtil
-import okhttp3.CipherSuite
-import okhttp3.ConnectionSpec
 import okhttp3.Dns
 import okhttp3.Interceptor
-import okhttp3.TlsVersion
 import org.signal.core.util.Base64
 import org.signal.core.util.logging.Log
 import org.signal.network.config.SignalCdnUrl
@@ -17,125 +12,36 @@ import org.signal.network.config.SignalServiceUrl
 import org.signal.network.config.SignalStorageUrl
 import org.signal.network.config.SignalSvr2Url
 import org.signal.network.config.TrustStore
-import org.signal.network.exceptions.RequestCanceledException
-import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import org.thoughtcrime.securesms.BuildConfig
-import org.thoughtcrime.securesms.keyvalue.SettingsValues
-import org.thoughtcrime.securesms.keyvalue.SignalStore
-import org.thoughtcrime.securesms.keyvalue.proxy
-import org.thoughtcrime.securesms.net.CustomDns
 import org.thoughtcrime.securesms.net.DeprecatedClientPreventionInterceptor
 import org.thoughtcrime.securesms.net.DeviceTransferBlockingInterceptor
 import org.thoughtcrime.securesms.net.RemoteDeprecationDetectorInterceptor
-import org.thoughtcrime.securesms.net.SequentialDns
 import org.thoughtcrime.securesms.net.StandardUserAgentInterceptor
-import org.thoughtcrime.securesms.net.StaticDns
 import org.thoughtcrime.securesms.net.StorageServiceSizeLoggingInterceptor
+import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import java.io.IOException
 import java.util.Optional
-import kotlin.time.Duration.Companion.minutes
 
 /**
- * Provides a [SignalServiceConfiguration] to be used with our service layer.
- * If you're looking for a place to start, look at [getConfiguration].
+ * Self-hosted LAN-only transport.
+ *
+ * There are no public Signal URLs, public DNS resolvers, censorship
+ * domain-fronting alternatives, or transparent public-server fallbacks.
+ * A missing LAN CA or an invalid hostname is an explicit connection failure.
  */
 class SignalServiceNetworkAccess(context: Context) {
   companion object {
     private val TAG = Log.tag(SignalServiceNetworkAccess::class.java)
 
-    // Do not leak private .lan host lookups to Cloudflare or public static IPs.
+    /** Only the device/admin's trusted LAN resolver may resolve *.lan hosts. */
     @JvmField
     val DNS: Dns = Dns.SYSTEM
-
-    private fun String.stripProtocol(): String {
-      return this.removePrefix("https://")
-    }
-
-    private const val COUNTRY_CODE_EGYPT = 20
-    private const val COUNTRY_CODE_UAE = 971
-    private const val COUNTRY_CODE_OMAN = 968
-    private const val COUNTRY_CODE_QATAR = 974
-    private const val COUNTRY_CODE_IRAN = 98
-    private const val COUNTRY_CODE_CUBA = 53
-    private const val COUNTRY_CODE_UZBEKISTAN = 998
-    private const val COUNTRY_CODE_VENEZUELA = 58
-    private const val COUNTRY_CODE_PAKISTAN = 92
-
-    private const val G_HOST = "reflector-nrgwuv7kwq-uc.a.run.app"
-    private const val F_SERVICE_HOST = "chat-signal.global.ssl.fastly.net"
-    private const val F_STORAGE_HOST = "storage.signal.org.global.prod.fastly.net"
-    private const val F_CDN_HOST = "cdn.signal.org.global.prod.fastly.net"
-    private const val F_CDN2_HOST = "cdn2.signal.org.global.prod.fastly.net"
-    private const val F_CDN3_HOST = "cdn3-signal.global.ssl.fastly.net"
-    private const val F_CDSI_HOST = "cdsi-signal.global.ssl.fastly.net"
-    private const val F_SVR2_HOST = "svr2-signal.global.ssl.fastly.net"
-
-    private val GMAPS_CONNECTION_SPEC = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-      .tlsVersions(TlsVersion.TLS_1_2)
-      .cipherSuites(
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-        CipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-        CipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384,
-        CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA
-      )
-      .supportsTlsExtensions(true)
-      .build()
-
-    private val GMAIL_CONNECTION_SPEC = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-      .tlsVersions(TlsVersion.TLS_1_2)
-      .cipherSuites(
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-        CipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA
-      )
-      .supportsTlsExtensions(true)
-      .build()
-
-    private val PLAY_CONNECTION_SPEC = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-      .tlsVersions(TlsVersion.TLS_1_2)
-      .cipherSuites(
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-        CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-        CipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-        CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
-        CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA
-      )
-      .supportsTlsExtensions(true)
-      .build()
-
-    private val APP_CONNECTION_SPEC = ConnectionSpec.MODERN_TLS
-
-    /** How long a direct transport failure keeps CDN and storage requests on circumvention routes. */
-    private val MAYBE_CENSORED_DIRECT_FAILURE_COOLDOWN = 5.minutes
   }
 
-  private val serviceTrustStore: TrustStore = SignalServiceTrustStore(context)
-  private val localTrustStore: TrustStore = LocalServerTrustStore(context)
-  private val localEndpoints = LocalServerConfig.load(context)
-  private val gTrustStore: TrustStore = DomainFrontingTrustStore(context)
-  private val fTrustStore: TrustStore = DomainFrontingDigicertTrustStore(context)
+  private val endpoints: LocalServerConfig = LocalServerConfig.load(context)
+  private val lanTrust: TrustStore = LocalServerTrustStore(context)
 
-  private val interceptors: List<Interceptor> = listOf(
+  private val networkInterceptors: List<Interceptor> = listOf(
     StandardUserAgentInterceptor(),
     StorageServiceSizeLoggingInterceptor(),
     RemoteDeprecationDetectorInterceptor(this::getConfiguration),
@@ -143,215 +49,57 @@ class SignalServiceNetworkAccess(context: Context) {
     DeviceTransferBlockingInterceptor.getInstance()
   )
 
-  /** [SystemClock.elapsedRealtime] until which [hasRecentDirectTransportFailure] stays true, or 0 for no active cooldown. */
-  @Volatile
-  private var directTransportFailureCooldownUntil: Long = 0
+  private val zkGroupServerPublicParams: ByteArray = decodePublicParams("zkgroup", BuildConfig.ZKGROUP_SERVER_PUBLIC_PARAMS)
+  private val genericServerPublicParams: ByteArray = decodePublicParams("generic", BuildConfig.GENERIC_SERVER_PUBLIC_PARAMS)
+  private val backupServerPublicParams: ByteArray = decodePublicParams("backup", BuildConfig.BACKUP_SERVER_PUBLIC_PARAMS)
 
-  /** Records transport failures (not HTTP error statuses or cancellations) on the uncensored configuration's clients. */
-  private val directFetchFailureInterceptor = Interceptor { chain ->
-    try {
-      chain.proceed(chain.request())
+  private fun decodePublicParams(kind: String, data: String): ByteArray {
+    if (data.isBlank()) {
+      // Do not substitute Signal production cryptographic roots.
+      throw IllegalStateException("Local Signal $kind server public parameters are missing")
+    }
+    return try {
+      Base64.decode(data)
     } catch (e: IOException) {
-      if (e !is RequestCanceledException && !chain.call().isCanceled() && isCensored()) {
-        Log.w(TAG, "Network failure on direct request to ${chain.request().url.host}, falling back.", e)
-        directTransportFailureCooldownUntil = SystemClock.elapsedRealtime() + MAYBE_CENSORED_DIRECT_FAILURE_COOLDOWN.inWholeMilliseconds
-      }
-      throw e
+      throw IllegalStateException("Invalid local $kind public parameters", e)
     }
   }
 
-  private val zkGroupServerPublicParams: ByteArray = try {
-    Base64.decode(BuildConfig.ZKGROUP_SERVER_PUBLIC_PARAMS)
-  } catch (e: IOException) {
-    throw AssertionError(e)
-  }
-
-  private val genericServerPublicParams: ByteArray = try {
-    Base64.decode(BuildConfig.GENERIC_SERVER_PUBLIC_PARAMS)
-  } catch (e: IOException) {
-    throw AssertionError(e)
-  }
-
-  private val backupServerPublicParams: ByteArray = try {
-    Base64.decode(BuildConfig.BACKUP_SERVER_PUBLIC_PARAMS)
-  } catch (e: IOException) {
-    throw AssertionError(e)
-  }
-
-  private val baseGHostConfigs: List<HostConfig> = listOf(
-    HostConfig("https://www.google.com", G_HOST, GMAIL_CONNECTION_SPEC),
-    HostConfig("https://android.clients.google.com", G_HOST, PLAY_CONNECTION_SPEC),
-    HostConfig("https://clients3.google.com", G_HOST, GMAPS_CONNECTION_SPEC),
-    HostConfig("https://clients4.google.com", G_HOST, GMAPS_CONNECTION_SPEC),
-    HostConfig("https://googlemail.com", G_HOST, GMAIL_CONNECTION_SPEC)
-  )
-
-  private val fUrls = arrayOf("https://github.githubassets.com", "https://pinterest.com", "https://www.redditstatic.com")
-
-  private val fConfig: SignalServiceConfiguration = SignalServiceConfiguration(
-    signalServiceUrls = fUrls.map { SignalServiceUrl(it, F_SERVICE_HOST, fTrustStore, APP_CONNECTION_SPEC) }.toTypedArray(),
-    signalCdnUrlMap = mapOf(
-      0 to fUrls.map { SignalCdnUrl(it, F_CDN_HOST, fTrustStore, APP_CONNECTION_SPEC) }.toTypedArray(),
-      2 to fUrls.map { SignalCdnUrl(it, F_CDN2_HOST, fTrustStore, APP_CONNECTION_SPEC) }.toTypedArray(),
-      3 to fUrls.map { SignalCdnUrl(it, F_CDN3_HOST, fTrustStore, APP_CONNECTION_SPEC) }.toTypedArray()
-    ),
-    signalStorageUrls = fUrls.map { SignalStorageUrl(it, F_STORAGE_HOST, fTrustStore, APP_CONNECTION_SPEC) }.toTypedArray(),
-    signalCdsiUrls = fUrls.map { SignalCdsiUrl(it, F_CDSI_HOST, fTrustStore, APP_CONNECTION_SPEC) }.toTypedArray(),
-    signalSvr2Urls = fUrls.map { SignalSvr2Url(it, fTrustStore, F_SVR2_HOST, APP_CONNECTION_SPEC) }.toTypedArray(),
-    networkInterceptors = interceptors,
-    dns = Optional.of(DNS),
-    signalProxy = Optional.empty(),
-    zkGroupServerPublicParams = zkGroupServerPublicParams,
-    genericServerPublicParams = genericServerPublicParams,
-    backupServerPublicParams = backupServerPublicParams,
-    censored = true
-  )
-
-  private val censorshipConfiguration: Map<Int, SignalServiceConfiguration> = mapOf(
-    COUNTRY_CODE_EGYPT to buildGConfiguration(
-      listOf(HostConfig("https://www.google.com.eg", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_UAE to buildGConfiguration(
-      listOf(HostConfig("https://www.google.ae", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_OMAN to buildGConfiguration(
-      listOf(HostConfig("https://www.google.com.om", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_QATAR to buildGConfiguration(
-      listOf(HostConfig("https://www.google.com.qa", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_UZBEKISTAN to buildGConfiguration(
-      listOf(HostConfig("https://www.google.co.uz", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_VENEZUELA to buildGConfiguration(
-      listOf(HostConfig("https://www.google.co.ve", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_PAKISTAN to buildGConfiguration(
-      listOf(HostConfig("https://www.google.com.pk", G_HOST, GMAIL_CONNECTION_SPEC)) + baseGHostConfigs
-    ),
-    COUNTRY_CODE_IRAN to fConfig,
-    COUNTRY_CODE_CUBA to fConfig
-  )
-
-  private val defaultCensoredConfiguration: SignalServiceConfiguration = buildGConfiguration(baseGHostConfigs) + fConfig
-
-  private val defaultCensoredCountryCodes: Set<Int> = setOf(
-    COUNTRY_CODE_EGYPT,
-    COUNTRY_CODE_UAE,
-    COUNTRY_CODE_OMAN,
-    COUNTRY_CODE_QATAR,
-    COUNTRY_CODE_IRAN,
-    COUNTRY_CODE_CUBA,
-    COUNTRY_CODE_UZBEKISTAN,
-    COUNTRY_CODE_VENEZUELA,
-    COUNTRY_CODE_PAKISTAN
-  )
-
-  private val upstreamUncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
-    signalServiceUrls = arrayOf(SignalServiceUrl(BuildConfig.SIGNAL_URL, serviceTrustStore)),
-    signalCdnUrlMap = mapOf(
-      0 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN_URL, serviceTrustStore)),
-      2 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN2_URL, serviceTrustStore)),
-      3 to arrayOf(SignalCdnUrl(BuildConfig.SIGNAL_CDN3_URL, serviceTrustStore))
-    ),
-    signalStorageUrls = arrayOf(SignalStorageUrl(BuildConfig.STORAGE_URL, serviceTrustStore)),
-    signalCdsiUrls = arrayOf(SignalCdsiUrl(BuildConfig.SIGNAL_CDSI_URL, serviceTrustStore)),
-    signalSvr2Urls = arrayOf(SignalSvr2Url(BuildConfig.SIGNAL_SVR2_URL, serviceTrustStore)),
-    networkInterceptors = interceptors + directFetchFailureInterceptor,
-    dns = Optional.of(DNS),
-    signalProxy = if (SignalStore.proxy.isProxyEnabled) Optional.ofNullable(SignalStore.proxy.proxy) else Optional.empty(),
-    zkGroupServerPublicParams = zkGroupServerPublicParams,
-    genericServerPublicParams = genericServerPublicParams,
-    backupServerPublicParams = backupServerPublicParams,
-    censored = false
-  )
-
-  /**
-   * All self-hosted endpoints use the single bundled LAN CA and system DNS.
-   * Crucially there is NO fallback to public Signal/Google/Fastly hosts.
-   */
   val uncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
-    signalServiceUrls = arrayOf(SignalServiceUrl(localEndpoints.signalApiUrl, localTrustStore)),
+    signalServiceUrls = arrayOf(SignalServiceUrl(endpoints.signalApiUrl, lanTrust)),
     signalCdnUrlMap = mapOf(
-      0 to arrayOf(SignalCdnUrl(localEndpoints.cdn0Url, localTrustStore)),
-      2 to arrayOf(SignalCdnUrl(localEndpoints.cdn2Url, localTrustStore)),
-      3 to arrayOf(SignalCdnUrl(localEndpoints.cdn3Url, localTrustStore))
+      0 to arrayOf(SignalCdnUrl(endpoints.cdn0Url, lanTrust)),
+      2 to arrayOf(SignalCdnUrl(endpoints.cdn2Url, lanTrust)),
+      3 to arrayOf(SignalCdnUrl(endpoints.cdn3Url, lanTrust))
     ),
-    signalStorageUrls = arrayOf(SignalStorageUrl(localEndpoints.storageUrl, localTrustStore)),
-    signalCdsiUrls = arrayOf(SignalCdsiUrl(localEndpoints.cdsiUrl, localTrustStore)),
-    signalSvr2Urls = arrayOf(SignalSvr2Url(localEndpoints.svr2Url, localTrustStore)),
-    networkInterceptors = interceptors,
-    dns = Optional.of(Dns.SYSTEM),
+    signalStorageUrls = arrayOf(SignalStorageUrl(endpoints.storageUrl, lanTrust)),
+    signalCdsiUrls = arrayOf(SignalCdsiUrl(endpoints.cdsiUrl, lanTrust)),
+    signalSvr2Urls = arrayOf(SignalSvr2Url(endpoints.svr2Url, lanTrust)),
+    networkInterceptors = networkInterceptors,
+    dns = Optional.of(DNS),
     signalProxy = Optional.empty(),
     zkGroupServerPublicParams = zkGroupServerPublicParams,
     genericServerPublicParams = genericServerPublicParams,
     backupServerPublicParams = backupServerPublicParams,
     censored = false
   )
-
-  /**
-   * True if a direct request failed at the transport level within [MAYBE_CENSORED_DIRECT_FAILURE_COOLDOWN] and the network
-   * has not changed since. Chat and CDN hosts can be blocked independently, so a direct chat connection alone is not proof.
-   */
-  fun hasRecentDirectTransportFailure(): Boolean {
-    return SystemClock.elapsedRealtime() < directTransportFailureCooldownUntil
-  }
-
-  fun onNetworkChange() {
-    directTransportFailureCooldownUntil = 0
-  }
-
-  fun getConfiguration(): SignalServiceConfiguration {
-    return getConfiguration(SignalStore.account.e164)
-  }
 
   @Suppress("UNUSED_PARAMETER")
-  fun getConfiguration(e164: String?): SignalServiceConfiguration {
-    // No public Signal or domain-fronting fallback, regardless of country code.
-    return uncensoredConfiguration
-  }
+  fun getConfiguration(e164: String?): SignalServiceConfiguration = uncensoredConfiguration
 
-  fun isCensored(): Boolean {
-    return isCensored(SignalStore.account.e164)
-  }
+  fun getConfiguration(): SignalServiceConfiguration = uncensoredConfiguration
 
-  fun isCensored(number: String?): Boolean {
-    return getConfiguration(number) != uncensoredConfiguration
-  }
+  fun isCensored(): Boolean = false
+
+  @Suppress("UNUSED_PARAMETER")
+  fun isCensored(number: String?): Boolean = false
 
   @Suppress("UNUSED_PARAMETER")
   fun isCountryCodeCensoredByDefault(countryCode: Int): Boolean = false
 
-  private fun buildGConfiguration(
-    hostConfigs: List<HostConfig>
-  ): SignalServiceConfiguration {
-    val serviceUrls: Array<SignalServiceUrl> = hostConfigs.map { SignalServiceUrl("${it.baseUrl}/service", it.host, gTrustStore, it.connectionSpec) }.toTypedArray()
-    val cdnUrls: Array<SignalCdnUrl> = hostConfigs.map { SignalCdnUrl("${it.baseUrl}/cdn", it.host, gTrustStore, it.connectionSpec) }.toTypedArray()
-    val cdn2Urls: Array<SignalCdnUrl> = hostConfigs.map { SignalCdnUrl("${it.baseUrl}/cdn2", it.host, gTrustStore, it.connectionSpec) }.toTypedArray()
-    val cdn3Urls: Array<SignalCdnUrl> = hostConfigs.map { SignalCdnUrl("${it.baseUrl}/cdn3", it.host, gTrustStore, it.connectionSpec) }.toTypedArray()
-    val storageUrls: Array<SignalStorageUrl> = hostConfigs.map { SignalStorageUrl("${it.baseUrl}/storage", it.host, gTrustStore, it.connectionSpec) }.toTypedArray()
-    val cdsiUrls: Array<SignalCdsiUrl> = hostConfigs.map { SignalCdsiUrl("${it.baseUrl}/cdsi", it.host, gTrustStore, it.connectionSpec) }.toTypedArray()
-    val svr2Urls: Array<SignalSvr2Url> = hostConfigs.map { SignalSvr2Url("${it.baseUrl}/svr2", gTrustStore, it.host, it.connectionSpec) }.toTypedArray()
+  fun hasRecentDirectTransportFailure(): Boolean = false
 
-    return SignalServiceConfiguration(
-      signalServiceUrls = serviceUrls,
-      signalCdnUrlMap = mapOf(
-        0 to cdnUrls,
-        2 to cdn2Urls,
-        3 to cdn3Urls
-      ),
-      signalStorageUrls = storageUrls,
-      signalCdsiUrls = cdsiUrls,
-      signalSvr2Urls = svr2Urls,
-      networkInterceptors = interceptors,
-      dns = Optional.of(DNS),
-      signalProxy = Optional.empty(),
-      zkGroupServerPublicParams = zkGroupServerPublicParams,
-      genericServerPublicParams = genericServerPublicParams,
-      backupServerPublicParams = backupServerPublicParams,
-      censored = true
-    )
+  fun onNetworkChange() {
+    Log.d(TAG, "LAN network changed; system DNS and TLS will reconnect normally")
   }
-
-  private data class HostConfig(val baseUrl: String, val host: String, val connectionSpec: ConnectionSpec)
 }
