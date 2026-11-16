@@ -6,6 +6,8 @@ on:
     branches:
     - 'main'
     - '8.**'
+    - 'feat/lan-device-auth-ntfy-rebuild'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -17,7 +19,8 @@ permissions:
 jobs:
   build:
 
-    runs-on: ubuntu-latest-8-cores
+    # Generic hosted runner: the original 8-core runner is not assigned in this repository.
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

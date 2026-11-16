@@ -58,12 +58,14 @@ check("FirebaseMessaging" not in ntfy and "FirebaseApp" not in ntfy, "ntfy must 
 
 network = read("app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt")
 check("val DNS: Dns = Dns.SYSTEM" in network, "System DNS required")
-check("return uncensoredConfiguration" in network, "Public Signal fallback must be disabled")
+check("= uncensoredConfiguration" in network, "Public Signal fallback must be disabled")
 check("LocalServerTrustStore(context)" in network, "Missing private CA trust")
 check("CustomDns(\"1.1.1.1\")" not in network, "Public Cloudflare DNS must be absent")
 
 gradle = read("app/build.gradle.kts")
 check("lanDocument" in gradle and "Release blocked" in gradle, "Gradle must read LAN JSON and block unconfigured releases")
+check("libs.firebase.messaging" not in gradle, "Firebase Messaging runtime dependency must be removed")
+check("firebase-messaging =" not in read("gradle/libs.versions.toml"), "Firebase Messaging version catalog entry remains")
 check("LAN1." in read("app/src/main/java/org/thoughtcrime/securesms/registration/local/LocalDeviceAuthClient.kt"), "Signed LAN registration ticket required")
 
 if errors:
