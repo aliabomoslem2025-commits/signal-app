@@ -74,6 +74,7 @@
 
     <application
         android:name=".ApplicationContext"
+        android:usesCleartextTraffic="false"
         android:allowBackup="true"
         android:backupAgent=".absbackup.SignalBackupAgent"
         android:enableOnBackInvokedCallback="false"
@@ -1369,13 +1370,11 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
 
+        <!-- ntfy is embedded: no Firebase Messaging service is exported or registered. -->
         <service
-            android:name=".gcm.FcmReceiveService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
+            android:name=".push.NtfyPushService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
 
         <service
             android:name=".gcm.FcmJobService"
