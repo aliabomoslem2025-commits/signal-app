@@ -57,6 +57,9 @@ import kotlin.time.Duration
 
 interface NetworkController {
 
+  /** A true value forbids public SMS, CAPTCHA and recovery-password registration. */
+  fun isLocalAuthEnabled(): Boolean = false
+
   /**
    * Request that the service initialize a new registration session.
    *
