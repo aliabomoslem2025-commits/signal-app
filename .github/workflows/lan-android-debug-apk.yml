@@ -1,0 +1,53 @@
+name: LAN Android Debug APK build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "feature/registration/**"
+      - "demo/registration/**"
+      - "lib/**"
+      - "gradle/**"
+      - "build-logic/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - ".github/workflows/lan-android-debug-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          lfs: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check LAN source restrictions
+        run: python3 scripts/lan_release_guard.py
+      - name: Compile a real Play/Production debug APK
+        run: ./gradlew :Signal-Android:assemblePlayProdDebug --stacktrace --no-daemon
+      - name: Upload debug APK only if compilation succeeded
+        uses: actions/upload-artifact@v4
+        with:
+          name: signal-lan-play-prod-debug
+          path: app/build/outputs/apk/playProd/debug/*.apk
+          if-no-files-found: error
+      - name: Save failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-debug-apk-reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+          if-no-files-found: ignore
