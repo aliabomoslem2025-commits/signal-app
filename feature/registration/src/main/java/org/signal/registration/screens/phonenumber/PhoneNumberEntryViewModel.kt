@@ -33,6 +33,7 @@ import org.signal.registration.PendingRestoreOption
 import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
+import org.signal.registration.LanDeviceNotAuthorizedException
 import org.signal.registration.RegistrationRoute
 import org.signal.registration.screens.countrycode.Country
 import org.signal.registration.screens.countrycode.CountryUtils
@@ -148,9 +149,11 @@ class PhoneNumberEntryViewModel(
         }
       }
       is PhoneNumberEntryScreenEvents.LinkDevice -> {
+        if (repository.isLocalAuthEnabled()) return
         parentEventEmitter.navigateTo(RegistrationRoute.LinkAccount())
       }
       is PhoneNumberEntryScreenEvents.RegisterWithoutNumber -> {
+        if (repository.isLocalAuthEnabled()) return
         if (state.sawArchiveRestoreSelectionScreen) {
           parentEventEmitter.navigateTo(RegistrationRoute.SignalLoginCredentialEntry())
         } else {
@@ -183,6 +186,9 @@ class PhoneNumberEntryViewModel(
       }
       is PhoneNumberEntryScreenEvents.NetworkErrorDialogDismissed -> {
         stateEmitter(state.copy(dialogs = state.dialogs.copy(networkError = false)))
+      }
+      is PhoneNumberEntryScreenEvents.UnauthorizedDeviceDialogDismissed -> {
+        stateEmitter(state.copy(dialogs = state.dialogs.copy(unauthorizedDevice = false)))
       }
       is PhoneNumberEntryScreenEvents.UnknownErrorDialogDismissed -> {
         stateEmitter(state.copy(dialogs = state.dialogs.copy(unknownError = false)))
@@ -323,7 +329,7 @@ class PhoneNumberEntryViewModel(
     val e164 = "+${state.countryCode}${state.nationalNumber}"
 
     // If the user selected a restore option before entering their phone number, navigate to the restore flow
-    if (state.pendingRestoreOption != null) {
+    if (state.pendingRestoreOption != null && !repository.isLocalAuthEnabled()) {
       parentEventEmitter(RegistrationFlowEvent.E164Chosen(e164))
 
       Log.i(TAG, "Pending restore option: ${state.pendingRestoreOption}. Navigating to appropriate screen.")
@@ -337,7 +343,7 @@ class PhoneNumberEntryViewModel(
     }
 
     // If we're re-registering for the same number we used to be registered for, we should try to skip right to registration
-    if (state.preExistingRegistrationData?.e164 == e164) {
+    if (!repository.isLocalAuthEnabled() && state.preExistingRegistrationData?.e164 == e164) {
       val masterKey = state.preExistingRegistrationData.aep.deriveMasterKey()
       val recoveryPassword = masterKey.deriveRegistrationRecoveryPassword()
       val registrationLock = masterKey.deriveRegistrationLock().takeIf { state.preExistingRegistrationData.registrationLockEnabled }
@@ -544,9 +550,13 @@ class PhoneNumberEntryViewModel(
   ): PhoneNumberEntryState {
     var state = inputState.copy()
 
+    if (repository.isLocalAuthEnabled() && state.sessionMetadata?.id?.startsWith("LOCAL1.") != true) {
+      state = state.copy(sessionMetadata = null, smsVerificationCodeRequest = null)
+    }
+
     // Detect if we have valid SVR credentials for the current number. If so, we can go right to the PIN entry screen.
     // If they successfully restore the master key at that screen, we can use that to build the RRP and register without SMS.
-    if (state.restoredSvrCredentials.isNotEmpty()) {
+    if (!repository.isLocalAuthEnabled() && state.restoredSvrCredentials.isNotEmpty()) {
       when (val result = repository.checkSvrCredentials(e164, state.restoredSvrCredentials)) {
         is RequestResult.Success -> {
           Log.i(TAG, "[CheckSVRCredentials] Successfully validated credentials for $e164.")
@@ -612,6 +622,9 @@ class PhoneNumberEntryViewModel(
         return state.copy(dialogs = state.dialogs.copy(networkError = true))
       }
       is RequestResult.ApplicationError -> {
+        if (response.cause is LanDeviceNotAuthorizedException) {
+          return state.copy(dialogs = state.dialogs.copy(unauthorizedDevice = true))
+        }
         Log.w(TAG, "Unknown error when creating session.", response.cause)
         return state.copy(dialogs = state.dialogs.copy(unknownError = true))
       }
@@ -671,7 +684,7 @@ class PhoneNumberEntryViewModel(
 
     val verificationCodeResponse = this@PhoneNumberEntryViewModel.repository.requestVerificationCode(
       sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
+      smsAutoRetrieveCodeSupported = !repository.isLocalAuthEnabled() && repository.registerSmsListener(),
       transport = VerificationCodeTransport.SMS
     )
 
@@ -721,6 +734,9 @@ class PhoneNumberEntryViewModel(
         return state.copy(dialogs = state.dialogs.copy(networkError = true))
       }
       is RequestResult.ApplicationError -> {
+        if (verificationCodeResponse.cause is LanDeviceNotAuthorizedException) {
+          return state.copy(dialogs = state.dialogs.copy(unauthorizedDevice = true))
+        }
         Log.w(TAG, "[RequestVerificationCode] Unknown error when creating session.", verificationCodeResponse.cause)
         return state.copy(dialogs = state.dialogs.copy(unknownError = true))
       }
@@ -793,7 +809,7 @@ class PhoneNumberEntryViewModel(
 
     val verificationCodeResponse = this@PhoneNumberEntryViewModel.repository.requestVerificationCode(
       sessionId = sessionMetadata.id,
-      smsAutoRetrieveCodeSupported = repository.registerSmsListener(),
+      smsAutoRetrieveCodeSupported = !repository.isLocalAuthEnabled() && repository.registerSmsListener(),
       transport = VerificationCodeTransport.SMS
     )
 
