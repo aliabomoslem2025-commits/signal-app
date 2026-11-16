@@ -351,13 +351,6 @@ fun TopAppBar(
         offsetY = 0.dp
       ) {
         DropdownMenus.Item(
-          text = { Text(text = stringResource(R.string.RegistrationActivity_use_proxy)) },
-          onClick = {
-            RegistrationDependencies.get().proxyConfigCallback?.invoke(context)
-            menuController.hide()
-          }
-        )
-        DropdownMenus.Item(
           text = { Text(text = stringResource(R.string.LanRegistration__local_server_setup)) },
           onClick = {
             context.startActivity(
@@ -391,7 +384,7 @@ private fun Description(twoPane: Boolean = false) {
   )
 
   Text(
-    text = stringResource(R.string.RegistrationActivity_you_will_receive_a_verification_code),
+    text = stringResource(R.string.LanRegistration__device_code_description),
     style = if (twoPane) MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Normal) else MaterialTheme.typography.bodyLarge,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
     modifier = Modifier.padding(top = 16.dp)
