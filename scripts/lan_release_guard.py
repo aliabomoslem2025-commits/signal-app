@@ -72,6 +72,10 @@ check("CustomDns(\"1.1.1.1\")" not in network, "Public Cloudflare DNS must be ab
 gradle = read("app/build.gradle.kts")
 check("lanDocument" in gradle and "Release blocked" in gradle, "Gradle must read LAN JSON and block unconfigured releases")
 check("libs.firebase.messaging" not in gradle, "Firebase Messaging runtime dependency must be removed")
+check("FirebaseTestLabTask" not in gradle, "Firebase Test Lab and gcloud integrations are not allowed in isolated LAN builds")
+for deprecated in ("app/src/main/res/values/firebase_messaging.xml", "app/proguard/proguard-firebase-messaging.pro"):
+    check(not (root / deprecated).exists(), f"Remove stale Firebase configuration from APK/build: {deprecated}")
+
 check("firebase-messaging =" not in read("gradle/libs.versions.toml"), "Firebase Messaging version catalog entry remains")
 check("LAN1." in read("app/src/main/java/org/thoughtcrime/securesms/registration/local/LocalDeviceAuthClient.kt"), "Signed LAN registration ticket required")
 
