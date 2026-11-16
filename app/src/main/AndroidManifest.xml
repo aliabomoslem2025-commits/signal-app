@@ -139,6 +139,10 @@
             android:theme="@style/TextSecure.DarkNoActionBar" />
 
         <activity
+            android:name=".registration.local.LocalServerSettingsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".DeviceProvisioningActivity"
             android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
             android:exported="true">
