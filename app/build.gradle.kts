@@ -281,7 +281,7 @@ android {
     vectorDrawables.useSupportLibrary = true
     project.ext.set("archivesBaseName", "Signal")
 
-    manifestPlaceholders["mapsKey"] = "AIzaSyCSx9xea86GwDKGznCAULE9Y5a8b-TfN9U"
+    manifestPlaceholders["mapsKey"] = ""
 
     buildConfigField("long", "BUILD_TIMESTAMP", getLastCommitTimestamp() + "L")
     buildConfigField("String", "GIT_HASH", "\"${getGitHash()}\"")
@@ -321,7 +321,7 @@ android {
     buildConfigField("String", "GIPHY_API_KEY", lanQuoted(""))
     buildConfigField("String", "SIGNAL_CAPTCHA_URL", lanQuoted(lanService("signalApi") + "/disabled-captcha"))
     buildConfigField("String", "RECAPTCHA_PROOF_URL", lanQuoted(lanService("signalApi") + "/disabled-captcha"))
-    buildConfigField("String", "WEBAUTHN_RP_ID", "\"login.signal.org\"")
+    buildConfigField("String", "WEBAUTHN_RP_ID", lanQuoted(java.net.URI(lanService("signalApi")).host))
     buildConfigField("org.signal.libsignal.net.Network.Environment", "LIBSIGNAL_NET_ENV", "org.signal.libsignal.net.Network.Environment.PRODUCTION")
     buildConfigField("int", "LIBSIGNAL_LOG_LEVEL", "org.signal.libsignal.protocol.logging.SignalProtocolLogger.INFO")
 
@@ -330,7 +330,7 @@ android {
     buildConfigField("String", "BUILD_VARIANT_TYPE", "\"unset\"")
     buildConfigField("String", "BADGE_STATIC_ROOT", lanQuoted(lanService("signalApi") + "/static/badges/"))
     buildConfigField("String", "STRIPE_BASE_URL", lanQuoted(lanService("signalApi") + "/disabled-payments"))
-    buildConfigField("String", "STRIPE_PUBLISHABLE_KEY", "\"pk_live_6cmGZopuTsV8novGgJJW9JpC00vLIgtQ1D\"")
+    buildConfigField("String", "STRIPE_PUBLISHABLE_KEY", lanQuoted(""))
     buildConfigField("boolean", "TRACING_ENABLED", "false")
     buildConfigField("boolean", "LINK_DEVICE_UX_ENABLED", "false")
 
