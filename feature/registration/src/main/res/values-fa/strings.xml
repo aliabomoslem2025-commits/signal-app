@@ -844,4 +844,5 @@
     <string name="PasskeyVerificationScreen__something_went_wrong_with_your_passkey">مشکلی در خصوص کلید عبور شما پیش آمد. لطفاً دوباره امتحان کنید.</string>
   <string name="LanRegistration__unauthorized_device">این شماره روی این گوشی مجاز نیست. برای ثبت دستگاه با مدیر سامانه تماس بگیرید.</string>
   <string name="LanRegistration__local_server_setup">سرور محلی و ثبت دستگاه</string>
+  <string name="LanRegistration__device_code_description">فعال‌سازی فقط روی گوشی تأییدشده توسط مدیر امکان‌پذیر است. دستگاه چالش سرور محلی را امضا می‌کند و پیامک ارسال نمی‌شود.</string>
 </resources>
