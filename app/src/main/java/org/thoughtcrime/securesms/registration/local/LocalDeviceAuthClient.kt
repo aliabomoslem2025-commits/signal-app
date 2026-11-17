@@ -2,6 +2,8 @@ package org.thoughtcrime.securesms.registration.local
 
 import android.content.Context
 import android.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.registration.LanDeviceNotAuthorizedException
@@ -15,8 +17,6 @@ import java.security.KeyStore
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * Device-only registration transport for the self-hosted Go local-auth sidecar.
@@ -76,7 +76,10 @@ class LocalDeviceAuthClient(context: Context) {
     val state = decodeChallenge(id)
     val challengeId = state.getString("challengeId")
     val signature = enrollmentKey.signCompletion(
-      challengeId, state.getString("phone"), state.getString("nonce"), code
+      challengeId,
+      state.getString("phone"),
+      state.getString("nonce"),
+      code
     )
     val response = post(
       "/v1/local-auth/complete",
@@ -93,16 +96,15 @@ class LocalDeviceAuthClient(context: Context) {
     .put("androidId", enrollmentKey.androidId())
     .put("publicKeyPem", enrollmentKey.publicKeyPem())
 
-  private fun metadata(id: String, allowed: Boolean, verified: Boolean) =
-    SessionMetadata(
-      id = id,
-      nextSms = null,
-      nextCall = null,
-      nextVerificationAttempt = null,
-      allowedToRequestCode = allowed,
-      requestedInformation = emptyList(),
-      verified = verified
-    )
+  private fun metadata(id: String, allowed: Boolean, verified: Boolean) = SessionMetadata(
+    id = id,
+    nextSms = null,
+    nextCall = null,
+    nextVerificationAttempt = null,
+    allowedToRequestCode = allowed,
+    requestedInformation = emptyList(),
+    verified = verified
+  )
 
   private fun decodeChallenge(id: String): JSONObject {
     require(isChallengeSession(id)) { "Not an enrolled LAN challenge" }

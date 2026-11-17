@@ -494,6 +494,7 @@ class RegistrationRepository(
    * [SignalLoginPriceResult.Unavailable], since the configuration fetch is not cached on failure and so a retry can
    * still succeed.
    */
+
   /** Whether Google Play can take a payment for a Signal Login right now, and if not, what is wrong with it. */
   suspend fun getPaymentAvailability(): PaymentAvailability = withContext(Dispatchers.IO) {
     val services = googlePlayServicesStatus()

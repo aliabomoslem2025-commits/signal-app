@@ -112,8 +112,7 @@ interface NetworkController {
     verificationCode: String,
     password: String,
     passwordConfirmation: String
-  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> =
-    RequestResult.ApplicationError(SecurityException("LAN password verification not implemented"))
+  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> = RequestResult.ApplicationError(SecurityException("LAN password verification not implemented"))
 
   /**
    * Officially register an account.

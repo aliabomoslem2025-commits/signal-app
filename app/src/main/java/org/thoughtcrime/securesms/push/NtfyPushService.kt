@@ -46,12 +46,10 @@ class NtfyPushService : SafeForegroundService() {
     private const val MAX_BACKOFF_SECONDS = 60L
 
     @JvmStatic
-    fun start(context: android.content.Context): Boolean =
-      SafeForegroundService.start(context, NtfyPushService::class.java)
+    fun start(context: android.content.Context): Boolean = SafeForegroundService.start(context, NtfyPushService::class.java)
 
     @JvmStatic
-    fun stop(context: android.content.Context): Boolean =
-      SafeForegroundService.stop(context, NtfyPushService::class.java)
+    fun stop(context: android.content.Context): Boolean = SafeForegroundService.stop(context, NtfyPushService::class.java)
   }
 
   override val tag: String get() = TAG
@@ -59,10 +57,10 @@ class NtfyPushService : SafeForegroundService() {
 
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
   private var running: Job? = null
+
   @Volatile private var connection: HttpsURLConnection? = null
 
-  override fun serviceType(intent: Intent): Int =
-    if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0
+  override fun serviceType(intent: Intent): Int = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0
 
   override fun getForegroundNotification(intent: Intent): Notification {
     val manager = getSystemService(NotificationManager::class.java)

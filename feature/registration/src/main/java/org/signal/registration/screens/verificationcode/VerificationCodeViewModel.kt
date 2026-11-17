@@ -33,12 +33,12 @@ import org.signal.network.api.RegistrationApiV2.RequestVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.network.api.RegistrationApiV2.SubmitVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.VerificationCodeTransport
+import org.signal.registration.LanPasswordInvalidException
+import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.PendingRestoreOption
 import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
-import org.signal.registration.LocalAuthCodeBus
-import org.signal.registration.LanPasswordInvalidException
 import org.signal.registration.RegistrationRoute
 import org.signal.registration.screens.util.navigateBack
 import org.signal.registration.screens.util.navigateTo
@@ -285,7 +285,8 @@ class VerificationCodeViewModel(
     if (!state.localAuth || state.isSubmittingCode) return state
     // Also checked authoritatively on the local-auth server.
     if (state.localPasswordSetupRequired &&
-        (event.password != event.confirmation || event.password.length < 12)) return state
+      (event.password != event.confirmation || event.password.length < 12)
+    ) return state
     stateEmitter(state.copy(isSubmittingCode = true, pendingLocalCode = null))
     val result = performSubmission(state.copy(pendingLocalCode = null), code, event.password, event.confirmation)
     return if (result.sessionMetadata?.verified == true) {
