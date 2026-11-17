@@ -112,7 +112,7 @@ class LocalServerSettingsActivity : Activity() {
     description("نکته: شناسه ANDROID_ID ممکن است پس از بازنشانی کارخانه‌ای تغییر کند. برای تأیید هویت، سرور امضای کلید خصوصی این دستگاه را نیز بررسی می‌کند.")
 
     setContentView(ScrollView(this).apply {
-      fillViewport = true
+      isFillViewport = true
       addView(content)
     })
   }
