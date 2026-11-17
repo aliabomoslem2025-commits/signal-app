@@ -92,20 +92,13 @@ From the pre-login phone-number screen open the overflow menu and select
 **Local server and device enrollment**. Choose
 **Copy device enrollment information**. The copied JSON contains
 `androidId` and `publicKeyPem` only. The administrator verifies the
-identity and E.164 ownership out-of-band, creates that number and
+person's identity and approves the E.164 number assignment, creates that number and
 registers that handset's public key in the dashboard. Only one active
 primary device may be enrolled per number on the companion Go sidecar.
 Enter the phone number on the approved handset; it signs the challenge
 and receives the server-generated activation code.
 
-**Important:** Android's readable phone number and ANDROID_ID do *not*
-prove the physical SIM card is inserted or that its number is owned by
-this handset. The current app proves the presence of the enrolled Android
-Keystore key, **not live SIM possession**. If your requirement is that SIM
-A must physically remain in handset A when activating, integrate an
-independently verified carrier/SMS-to-that-SIM factor using a private
-GSM modem or carrier verification. No such SMS gateway has been deployed
-and SMS was deliberately disabled.
+**Authentication policy:** administrator-approved phone/handset binding is the source of authorization. The app does not inspect SIM presence, read the carrier number, or require an SMS/carrier service. It proves possession of the enrolled Android Keystore key and the user's password. ANDROID_ID and the Keystore key are reused while available; factory reset, app reinstallation or loss of the key requires explicit administrator re-enrollment. No permanently immutable Android identifier is claimed.
 
 ## Security and operational acceptance tests
 
