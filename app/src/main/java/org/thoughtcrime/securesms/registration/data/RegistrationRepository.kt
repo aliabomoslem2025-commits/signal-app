@@ -44,7 +44,6 @@ import org.thoughtcrime.securesms.crypto.storage.SignalServiceAccountDataStoreIm
 import org.thoughtcrime.securesms.database.IdentityTable
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobmanager.runJobBlocking
 import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob
 import org.thoughtcrime.securesms.jobs.DirectoryRefreshJob
@@ -89,8 +88,6 @@ import org.whispersystems.signalservice.internal.push.RegistrationSessionMetadat
 import org.whispersystems.signalservice.internal.push.VerifyAccountResponse
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import java.util.Locale
-import java.util.Optional
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext

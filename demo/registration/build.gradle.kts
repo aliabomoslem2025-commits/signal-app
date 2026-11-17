@@ -103,8 +103,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling.core)
 
   // LAN device activation does not depend on Firebase or FCM.
-  implementation(libs.google.play.services.base)
-  implementation(libs.kotlinx.coroutines.play.services)
 }
 
 fun loadKeystoreProperties(filename: String): Properties? {
@@ -118,3 +116,4 @@ fun loadKeystoreProperties(filename: String): Properties? {
     null
   }
 }
+

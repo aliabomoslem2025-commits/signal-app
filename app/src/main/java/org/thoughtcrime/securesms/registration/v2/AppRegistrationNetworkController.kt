@@ -89,7 +89,6 @@ import org.thoughtcrime.securesms.backup.v2.BackupRepository
 import org.thoughtcrime.securesms.backup.v2.RestoreTimestampResult
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileContentUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileKeyUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceSyncRequestJob
@@ -241,8 +240,13 @@ class AppRegistrationNetworkController(
   ): RequestResult<RegisterAccountResponse, RegisterAccountError> {
     // A correct E.164 number or a recovery password is NEVER sufficient by itself.
     // The server independently validates and consumes the signed single-use ticket.
-    if (e164.isNullOrBlank() || sessionId.isNullOrBlank() || !localAuth.isCompletedSession(sessionId) ||
-      !recoveryPassword.isNullOrBlank() || receiptCredentialPresentation != null || aci != null
+    if (
+      e164.isNullOrBlank() ||
+      sessionId.isNullOrBlank() ||
+      !localAuth.isCompletedSession(sessionId) ||
+      !recoveryPassword.isNullOrBlank() ||
+      receiptCredentialPresentation != null ||
+      aci != null
     ) {
       return RequestResult.ApplicationError(SecurityException("Only an administrator-enrolled handset can register"))
     }
