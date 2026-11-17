@@ -52,8 +52,7 @@ class LocalDeviceAuthKeyStore(private val context: Context) {
     return Base64.encodeToString(signature.sign(), Base64.NO_WRAP)
   }
 
-  fun signChallenge(id: String, phone: String, nonce: String): String =
-    sign("signal-local-auth-v1\n$id\n$phone\n$nonce")
+  fun signChallenge(id: String, phone: String, nonce: String): String = sign("signal-local-auth-v1\n$id\n$phone\n$nonce")
 
   fun signCompletion(id: String, phone: String, nonce: String, code: String): String {
     require(code.length == 6 && code.all { it in '0'..'9' })

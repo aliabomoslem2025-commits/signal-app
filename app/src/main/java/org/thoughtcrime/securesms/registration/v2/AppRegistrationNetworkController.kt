@@ -36,8 +36,6 @@ import org.signal.libsignal.zkgroup.receipts.ReceiptCredentialResponse
 import org.signal.libsignal.zkgroup.receipts.ReceiptSerial
 import org.signal.network.NetworkResult
 import org.signal.network.api.ArchiveApiV2
-import org.thoughtcrime.securesms.push.NtfyPushService
-import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.signal.network.api.RegistrationApiV2
 import org.signal.network.api.RegistrationApiV2.AccountAttributes
 import org.signal.network.api.RegistrationApiV2.CheckSvrCredentialsError
@@ -91,7 +89,6 @@ import org.thoughtcrime.securesms.backup.v2.BackupRepository
 import org.thoughtcrime.securesms.backup.v2.RestoreTimestampResult
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileContentUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceProfileKeyUpdateJob
 import org.thoughtcrime.securesms.jobs.MultiDeviceSyncRequestJob
@@ -105,8 +102,10 @@ import org.thoughtcrime.securesms.pin.SvrRepository
 import org.thoughtcrime.securesms.pin.SvrWrongPinException
 import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
+import org.thoughtcrime.securesms.push.NtfyPushService
 import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
+import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.ui.restore.StorageServiceRestore
 import org.thoughtcrime.securesms.registration.ui.restore.e164OrNull
 import org.thoughtcrime.securesms.registration.ui.restore.pniIdentityKeyPair
@@ -206,8 +205,7 @@ class AppRegistrationNetworkController(
   override suspend fun submitVerificationCode(
     sessionId: String,
     verificationCode: String
-  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> =
-    RequestResult.ApplicationError(SecurityException("LAN user password is required"))
+  ): RequestResult<SessionMetadata, SubmitVerificationCodeError> = RequestResult.ApplicationError(SecurityException("LAN user password is required"))
 
   override suspend fun submitLocalVerificationCode(
     sessionId: String,
@@ -242,8 +240,14 @@ class AppRegistrationNetworkController(
   ): RequestResult<RegisterAccountResponse, RegisterAccountError> {
     // A correct E.164 number or a recovery password is NEVER sufficient by itself.
     // The server independently validates and consumes the signed single-use ticket.
-    if (e164.isNullOrBlank() || sessionId.isNullOrBlank() || !localAuth.isCompletedSession(sessionId) ||
-        !recoveryPassword.isNullOrBlank() || receiptCredentialPresentation != null || aci != null) {
+    if (
+      e164.isNullOrBlank() ||
+      sessionId.isNullOrBlank() ||
+      !localAuth.isCompletedSession(sessionId) ||
+      !recoveryPassword.isNullOrBlank() ||
+      receiptCredentialPresentation != null ||
+      aci != null
+    ) {
       return RequestResult.ApplicationError(SecurityException("Only an administrator-enrolled handset can register"))
     }
     val result = registrationApi.registerAccount(

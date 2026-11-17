@@ -70,12 +70,15 @@ class LocalServerSettingsActivity : Activity() {
 
     try {
       val qr = qrBitmap(payload, 640)
-      content.addView(ImageView(this).apply {
-        setImageBitmap(qr)
-        contentDescription = "QR کد ثبت دستگاه؛ شامل شناسه و کلید عمومی"
-        adjustViewBounds = true
-        scaleType = ImageView.ScaleType.FIT_CENTER
-      }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(280)))
+      content.addView(
+        ImageView(this).apply {
+          setImageBitmap(qr)
+          contentDescription = "QR کد ثبت دستگاه؛ شامل شناسه و کلید عمومی"
+          adjustViewBounds = true
+          scaleType = ImageView.ScaleType.FIT_CENTER
+        },
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(280))
+      )
     } catch (e: Exception) {
       description("ساخت QR امکان‌پذیر نیست؛ اطلاعات متنی پایین را کپی یا اشتراک‌گذاری کنید.")
     }
@@ -85,36 +88,47 @@ class LocalServerSettingsActivity : Activity() {
       gravity = Gravity.CENTER
       setTextIsSelectable(true)
     }
-    content.addView(Button(this).apply {
-      text = "کپی شناسه"
-      setOnClickListener { copy("شناسه دستگاه", androidId) }
-    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    content.addView(
+      Button(this).apply {
+        text = "کپی شناسه"
+        setOnClickListener { copy("شناسه دستگاه", androidId) }
+      },
+      LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    )
 
-    content.addView(Button(this).apply {
-      text = "کپی اطلاعات کامل ثبت دستگاه"
-      setOnClickListener { copy("اطلاعات عمومی ثبت دستگاه", payload) }
-    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    content.addView(
+      Button(this).apply {
+        text = "کپی اطلاعات کامل ثبت دستگاه"
+        setOnClickListener { copy("اطلاعات عمومی ثبت دستگاه", payload) }
+      },
+      LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    )
 
-    content.addView(Button(this).apply {
-      text = "اشتراک‌گذاری برای مدیر"
-      setOnClickListener {
-        val send = Intent(Intent.ACTION_SEND).apply {
-          type = "text/plain"
-          putExtra(Intent.EXTRA_SUBJECT, "اطلاعات ثبت دستگاه Signal LAN")
-          putExtra(Intent.EXTRA_TEXT, payload)
+    content.addView(
+      Button(this).apply {
+        text = "اشتراک‌گذاری برای مدیر"
+        setOnClickListener {
+          val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "اطلاعات ثبت دستگاه Signal LAN")
+            putExtra(Intent.EXTRA_TEXT, payload)
+          }
+          startActivity(Intent.createChooser(send, "اشتراک‌گذاری اطلاعات دستگاه"))
         }
-        startActivity(Intent.createChooser(send, "اشتراک‌گذاری اطلاعات دستگاه"))
-      }
-    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+      },
+      LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    )
 
     description("متن قابل واردکردن در داشبورد (کلید عمومی + شناسه):")
     description(payload, 12f)
     description("نکته: شناسه ANDROID_ID ممکن است پس از بازنشانی کارخانه‌ای تغییر کند. برای تأیید هویت، سرور امضای کلید خصوصی این دستگاه را نیز بررسی می‌کند.")
 
-    setContentView(ScrollView(this).apply {
-      fillViewport = true
-      addView(content)
-    })
+    setContentView(
+      ScrollView(this).apply {
+        isFillViewport = true
+        addView(content)
+      }
+    )
   }
 
   private fun copy(label: String, text: String) {

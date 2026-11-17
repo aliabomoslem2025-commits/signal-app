@@ -44,7 +44,6 @@ import org.thoughtcrime.securesms.crypto.storage.SignalServiceAccountDataStoreIm
 import org.thoughtcrime.securesms.database.IdentityTable
 import org.thoughtcrime.securesms.database.SignalDatabase
 import org.thoughtcrime.securesms.dependencies.AppDependencies
-import org.thoughtcrime.securesms.gcm.FcmUtil
 import org.thoughtcrime.securesms.jobmanager.runJobBlocking
 import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob
 import org.thoughtcrime.securesms.jobs.DirectoryRefreshJob
@@ -89,8 +88,6 @@ import org.whispersystems.signalservice.internal.push.RegistrationSessionMetadat
 import org.whispersystems.signalservice.internal.push.VerifyAccountResponse
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import java.util.Locale
-import java.util.Optional
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
@@ -309,8 +306,13 @@ object RegistrationRepository {
     val auth = LocalDeviceAuthClient(context)
     if (auth.isChallengeSession(sessionId) || auth.isCompletedSession(sessionId)) {
       return@withContext RegistrationSessionCheckResult.Success(
-        sessionId, 0.seconds, 0.seconds, 0.seconds,
-        auth.isChallengeSession(sessionId), emptyList(), auth.isCompletedSession(sessionId)
+        sessionId,
+        0.seconds,
+        0.seconds,
+        0.seconds,
+        auth.isChallengeSession(sessionId),
+        emptyList(),
+        auth.isCompletedSession(sessionId)
       )
     }
     RegistrationSessionCheckResult.SessionNotFound(SecurityException("Only enrolled LAN sessions are accepted"))
@@ -390,12 +392,9 @@ object RegistrationRepository {
   /**
    * Submits the solved captcha token to the service.
    */
-  suspend fun submitCaptchaToken(context: Context, e164: String, password: String, sessionId: String, captchaToken: String): VerificationCodeRequestResult =
-    VerificationCodeRequestResult.UnknownError(SecurityException("CAPTCHA is not an allowed LAN authorization factor"))
+  suspend fun submitCaptchaToken(context: Context, e164: String, password: String, sessionId: String, captchaToken: String): VerificationCodeRequestResult = VerificationCodeRequestResult.UnknownError(SecurityException("CAPTCHA is not an allowed LAN authorization factor"))
 
-  suspend fun requestAndVerifyPushToken(context: Context, sessionId: String, e164: String, password: String): VerificationCodeRequestResult =
-    VerificationCodeRequestResult.UnknownError(SecurityException("FCM push challenge is disabled in LAN-only mode"))
-
+  suspend fun requestAndVerifyPushToken(context: Context, sessionId: String, e164: String, password: String): VerificationCodeRequestResult = VerificationCodeRequestResult.UnknownError(SecurityException("FCM push challenge is disabled in LAN-only mode"))
 
   /**
    * Submit the necessary assets as a verified account so that the user can actually use the service.
