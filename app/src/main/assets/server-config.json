@@ -2,17 +2,17 @@
   "mode": "LOCAL_LAN",
   "localAuthOnly": true,
   "services": {
-    "signalApi": "https://signal.lan",
-    "localAuthApi": "https://auth.lan",
-    "ntfy": "https://ntfy.lan",
-    "cdn0": "https://cdn.lan",
-    "cdn2": "https://cdn2.lan",
-    "cdn3": "https://cdn3.lan",
-    "storage": "https://storage.lan",
-    "cdsi": "https://cdsi.lan",
-    "svr2": "https://svr2.lan",
-    "callingSfu": "https://calling.lan",
-    "tus": "https://uploads.lan"
+    "signalApi": "https://api.myapp.com",
+    "localAuthApi": "https://auth.myapp.com",
+    "ntfy": "https://push.myapp.com",
+    "cdn0": "https://cdn0.myapp.com",
+    "cdn2": "https://cdn2.myapp.com",
+    "cdn3": "https://cdn3.myapp.com",
+    "storage": "https://storage.myapp.com",
+    "cdsi": "https://cdsi.myapp.com",
+    "svr2": "https://svr2.myapp.com",
+    "callingSfu": "https://call.myapp.com",
+    "tus": "https://cdn3.myapp.com"
   },
   "security": {
     "requireHttps": true,
