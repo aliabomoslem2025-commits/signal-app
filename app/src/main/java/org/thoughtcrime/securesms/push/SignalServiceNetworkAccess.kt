@@ -5,6 +5,8 @@ import okhttp3.Dns
 import okhttp3.Interceptor
 import org.signal.core.util.Base64
 import org.signal.core.util.logging.Log
+import org.signal.libsignal.zkgroup.GenericServerPublicParams
+import org.signal.libsignal.zkgroup.ServerPublicParams
 import org.signal.network.config.SignalCdnUrl
 import org.signal.network.config.SignalCdsiUrl
 import org.signal.network.config.SignalServiceConfiguration
@@ -12,8 +14,6 @@ import org.signal.network.config.SignalServiceUrl
 import org.signal.network.config.SignalStorageUrl
 import org.signal.network.config.SignalSvr2Url
 import org.signal.network.config.TrustStore
-import org.signal.libsignal.zkgroup.GenericServerPublicParams
-import org.signal.libsignal.zkgroup.ServerPublicParams
 import org.thoughtcrime.securesms.BuildConfig
 import org.thoughtcrime.securesms.net.DeprecatedClientPreventionInterceptor
 import org.thoughtcrime.securesms.net.DeviceTransferBlockingInterceptor
