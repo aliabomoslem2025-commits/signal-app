@@ -101,7 +101,6 @@ import org.thoughtcrime.securesms.pin.SvrRepository
 import org.thoughtcrime.securesms.pin.SvrWrongPinException
 import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
-import org.thoughtcrime.securesms.push.NtfyPushService
 import org.thoughtcrime.securesms.recipients.Recipient
 import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.ui.restore.StorageServiceRestore
@@ -259,11 +258,6 @@ class AppRegistrationNetworkController(
       totp = totp,
       webAuthnResponse = webAuthnResponse
     )
-    if (result is RequestResult.Success) {
-      // Login succeeds only with a consumed server-issued LAN device ticket.
-      // Start ntfy now; it retries until the persisted account is registered.
-      NtfyPushService.start(context)
-    }
     return result
   }
 
