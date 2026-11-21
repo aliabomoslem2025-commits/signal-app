@@ -116,4 +116,3 @@ fun loadKeystoreProperties(filename: String): Properties? {
     null
   }
 }
-

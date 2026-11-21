@@ -188,7 +188,9 @@ public final class JobManagerFactories {
       put(DownloadLatestEmojiDataJob.KEY,              new DownloadLatestEmojiDataJob.Factory());
       put(E164FormattingJob.KEY,                       new E164FormattingJob.Factory());
       put(EmojiSearchIndexDownloadJob.KEY,             new EmojiSearchIndexDownloadJob.Factory());
-      put(FcmRefreshJob.KEY,                           new FcmRefreshJob.Factory());
+      // Migrate queued jobs from older LAN builds without retaining an FCM runtime.
+      put("FcmRefreshJob",                              new NtfyPushSetupJob.Factory());
+      put(NtfyPushSetupJob.KEY,                          new NtfyPushSetupJob.Factory());
       put(FetchRemoteMegaphoneImageJob.KEY,            new FetchRemoteMegaphoneImageJob.Factory());
       put(FontDownloaderJob.KEY,                       new FontDownloaderJob.Factory());
       put(ForceUpdateGroupV2Job.KEY,                   new ForceUpdateGroupV2Job.Factory());

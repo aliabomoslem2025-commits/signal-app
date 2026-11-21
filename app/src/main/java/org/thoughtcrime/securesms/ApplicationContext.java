@@ -74,7 +74,6 @@ import org.thoughtcrime.securesms.database.SignalDatabase;
 import org.thoughtcrime.securesms.dependencies.AppDependencies;
 import org.thoughtcrime.securesms.dependencies.AppRemoteConfigDependencies;
 import org.thoughtcrime.securesms.dependencies.ApplicationDependencyProvider;
-import org.thoughtcrime.securesms.gcm.FcmFetchManager;
 import org.thoughtcrime.securesms.push.NtfyPushService;
 import org.thoughtcrime.securesms.glide.SignalGlideComponents;
 import org.thoughtcrime.securesms.jobmanager.impl.SealedSenderConstraint;
@@ -87,7 +86,6 @@ import org.thoughtcrime.securesms.jobs.CheckKeyTransparencyJob;
 import org.thoughtcrime.securesms.jobs.CheckServiceReachabilityJob;
 import org.thoughtcrime.securesms.jobs.DownloadLatestEmojiDataJob;
 import org.thoughtcrime.securesms.jobs.EmojiSearchIndexDownloadJob;
-import org.thoughtcrime.securesms.jobs.FcmRefreshJob;
 import org.thoughtcrime.securesms.jobs.FontDownloaderJob;
 import org.thoughtcrime.securesms.jobs.GroupRingCleanupJob;
 import org.thoughtcrime.securesms.jobs.GroupV2UpdateSelfProfileKeyJob;
@@ -228,7 +226,7 @@ public class ApplicationContext extends Application implements AppForegroundObse
               .addNonBlocking(this::initializeRevealableMessageManager)
               .addNonBlocking(this::initializePendingRetryReceiptManager)
               .addNonBlocking(this::initializeScheduledMessageManager)
-              .addNonBlocking(this::initializeFcmCheck)
+              .addNonBlocking(this::initializeNtfyPush)
               .addNonBlocking(this::recordProcessExits)
               .addNonBlocking(PreKeysSyncJob::enqueueIfNeeded)
               .addNonBlocking(this::initializePeriodicTasks)
@@ -290,7 +288,6 @@ public class ApplicationContext extends Application implements AppForegroundObse
     AppDependencies.getMegaphoneRepository().onAppForegrounded();
     AppDependencies.getDeadlockDetector().start();
     InAppPaymentKeepAliveJob.enqueueAndTrackTimeIfNecessary();
-    FcmFetchManager.onForeground(this);
     if (SignalStore.account().isRegistered()) {
       NtfyPushService.start(this);
     }
@@ -502,10 +499,11 @@ public class ApplicationContext extends Application implements AppForegroundObse
     }
   }
 
-  private void initializeFcmCheck() {
-    // Disable all upstream Firebase token refreshes. This runs after storage
-    // initialization; ntfy is started at foreground/boot/registration.
+  private void initializeNtfyPush() {
+    // Clear legacy persisted push state from previous FCM builds. The current
+    // device topic is provisioned by the authenticated Signal Server API.
     SignalStore.account().setFcmEnabled(false);
+    SignalStore.account().setFcmToken(null);
     if (SignalStore.account().isRegistered()) {
       NtfyPushService.start(this);
     }

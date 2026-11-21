@@ -20,7 +20,6 @@ import org.signal.core.models.AccountEntropyPool
 import org.signal.core.models.MasterKey
 import org.signal.core.models.ServiceId.ACI
 import org.signal.core.util.Util
-import org.signal.core.util.eventbus.EventBus
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.net.RequestResult
 import org.signal.libsignal.protocol.IdentityKey
@@ -102,9 +101,7 @@ import org.thoughtcrime.securesms.pin.SvrRepository
 import org.thoughtcrime.securesms.pin.SvrWrongPinException
 import org.thoughtcrime.securesms.profiles.AvatarHelper
 import org.thoughtcrime.securesms.profiles.ProfileName
-import org.thoughtcrime.securesms.push.NtfyPushService
 import org.thoughtcrime.securesms.recipients.Recipient
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
 import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.ui.restore.StorageServiceRestore
 import org.thoughtcrime.securesms.registration.ui.restore.e164OrNull
@@ -124,9 +121,6 @@ import java.io.Closeable
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -147,7 +141,6 @@ class AppRegistrationNetworkController(
 
   companion object {
     private val TAG = Log.tag(AppRegistrationNetworkController::class)
-    private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
     private val RETRY_BACKOFF = 5.seconds
   }
 
@@ -265,11 +258,6 @@ class AppRegistrationNetworkController(
       totp = totp,
       webAuthnResponse = webAuthnResponse
     )
-    if (result is RequestResult.Success) {
-      // Login succeeds only with a consumed server-issued LAN device ticket.
-      // Start ntfy now; it retries until the persisted account is registered.
-      NtfyPushService.start(context)
-    }
     return result
   }
 
@@ -314,28 +302,7 @@ class AppRegistrationNetworkController(
 
   override suspend fun getFcmToken(): String? = null
 
-  override suspend fun awaitPushChallengeToken(): String? = withContext(Dispatchers.IO) {
-    try {
-      val latch = CountDownLatch(1)
-      val challenge = AtomicReference<String>()
-
-      val subscription = EventBus.default.subscribe<PushChallengeRequest.PushChallengeEvent> { event ->
-        challenge.set(event.challenge)
-        latch.countDown()
-      }
-
-      try {
-        latch.await(PUSH_REQUEST_TIMEOUT, TimeUnit.MILLISECONDS)
-        challenge.get()
-      } finally {
-        subscription.unsubscribe()
-      }
-    } catch (e: Exception) {
-      Log.w(TAG, "Failed to await push challenge token", e)
-      null
-    }
-  }
-
+  override suspend fun awaitPushChallengeToken(): String? = null
   override fun getCaptchaUrl(): String {
     return BuildConfig.SIGNAL_CAPTCHA_URL
   }
