@@ -1,12 +1,12 @@
-package org.thoughtcrime.securesms.jobs;
+package org.thoughtcrime.securesms.jobs
 
-import android.app.Application;
-import io.mockk.every;
-import io.mockk.mockk;
-import io.mockk.verify;
-import org.junit.Rule;
-import org.junit.Test;
-import org.thoughtcrime.securesms.testutil.MockSignalStoreRule;
+import android.app.Application
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import org.junit.Rule
+import org.junit.Test
+import org.thoughtcrime.securesms.testutil.MockSignalStoreRule
 
 class NtfyPushSetupJobTest {
   @get:Rule
