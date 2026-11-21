@@ -224,6 +224,8 @@ object RegistrationRepository {
     SignalStore.account.setServicePassword(data.servicePassword)
     SignalStore.account.setRegistered(registered = true, isAciChanged = isAciChanged)
     SignalStore.registration.hasPromptedPushRegistration = true
+    // Start ntfy only after the authenticated account/device state is durably persisted.
+    org.thoughtcrime.securesms.push.NtfyPushService.start(context)
     SignalStore.account.isUnauthorizedReceived = false
 
     val masterKey = data.masterKey?.let { MasterKey(it.toByteArray()) }
