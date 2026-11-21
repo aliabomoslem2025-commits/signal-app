@@ -1,4 +1,4 @@
-# Signal Android — Self-hosted LAN operational status
+# Signal Android — Self-hosted custom-domain operational status
 
 > **Release decision: BLOCKED.** This branch reconstructs device-bound
 > authentication, ntfy push and private LAN routing in the **new** Signal
@@ -35,19 +35,22 @@
   message retrieval handles E2E encrypted payloads. No separate ntfy app,
   Firebase token request or Firebase Messaging dependency is required.
 - Build-time `app/src/main/assets/server-config.json` controls all core
-  HTTPS LAN hostnames, private CA and cryptographic public parameters.
+  HTTPS service hostnames, private CA and cryptographic public parameters.
   Network service routing does not use upstream Signal DNS, Cloudflare,
   Google domain fronting or alternate upstream CDNs. No universal trust
   manager or TLS hostname verification bypass is installed.
 
 ## Before compiling or installing
 
-1. Fill in `app/src/main/assets/server-config.json`:
-   `services.signalApi`, `localAuthApi`, `ntfy`, `cdn0`,
-   `cdn2`, `cdn3`, `storage`, `cdsi`, `svr2`,
-   `callingSfu`, and `tus`. All must point at reachable,
-   server-hosted **HTTPS** endpoints on the LAN. Placeholder `.lan`
-   addresses are NOT automatically functional.
+1. Fill in `app/src/main/assets/server-config.json` using the canonical
+   host map in `signal-server/deploy/lan-stack/domains.env`:
+   `signalApi=https://api.myapp.com`, `localAuthApi=https://auth.myapp.com`,
+   `ntfy=https://push.myapp.com`, `cdn0=https://cdn0.myapp.com`,
+   `cdn2=https://cdn2.myapp.com`, `cdn3=https://cdn3.myapp.com`,
+   `storage=https://storage.myapp.com`, `cdsi=https://cdsi.myapp.com`,
+   `svr2=https://svr2.myapp.com`, `callingSfu=https://call.myapp.com`,
+   and `tus=https://cdn3.myapp.com`. Every hostname must resolve to its
+   intended service and be reachable from enrolled devices over HTTPS.
 2. Insert your server's **real private CA PEM** in
    `security.trustedCaPem`. Issue certificates with SAN matching every
    hostname. Neither HTTP nor disabling certificate verification is
