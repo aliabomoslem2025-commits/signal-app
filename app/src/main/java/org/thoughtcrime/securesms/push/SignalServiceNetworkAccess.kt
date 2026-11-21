@@ -5,6 +5,8 @@ import okhttp3.Dns
 import okhttp3.Interceptor
 import org.signal.core.util.Base64
 import org.signal.core.util.logging.Log
+import org.signal.libsignal.zkgroup.GenericServerPublicParams
+import org.signal.libsignal.zkgroup.ServerPublicParams
 import org.signal.network.config.SignalCdnUrl
 import org.signal.network.config.SignalCdsiUrl
 import org.signal.network.config.SignalServiceConfiguration
@@ -58,11 +60,27 @@ class SignalServiceNetworkAccess(context: Context) {
       // Do not substitute Signal production cryptographic roots.
       throw IllegalStateException("Local Signal $kind server public parameters are missing")
     }
-    return try {
+
+    val decoded = try {
       Base64.decode(data)
     } catch (e: IOException) {
-      throw IllegalStateException("Invalid local $kind public parameters", e)
+      throw IllegalStateException("Invalid local $kind public parameters: malformed Base64", e)
     }
+
+    try {
+      when (kind) {
+        "zkgroup" -> ServerPublicParams(decoded)
+        "generic", "backup" -> GenericServerPublicParams(decoded)
+        else -> throw IllegalArgumentException("Unknown local server parameter kind: $kind")
+      }
+    } catch (e: Exception) {
+      throw IllegalStateException(
+        "Local Signal $kind server public parameters are not valid for this libsignal build",
+        e
+      )
+    }
+
+    return decoded
   }
 
   val uncensoredConfiguration: SignalServiceConfiguration = SignalServiceConfiguration(
