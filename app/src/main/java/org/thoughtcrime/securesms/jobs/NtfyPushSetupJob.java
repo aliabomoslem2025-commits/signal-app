@@ -50,6 +50,11 @@ public final class NtfyPushSetupJob extends BaseJob {
   }
 
   @Override
+  protected boolean onShouldRetry(@NonNull Exception e) {
+    return true;
+  }
+
+  @Override
   public void onFailure() {
     Log.w(TAG, "Legacy push migration job failed; the application startup path will retry ntfy setup.");
   }
