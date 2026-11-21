@@ -105,8 +105,9 @@ class NtfyPushService : SafeForegroundService() {
     while (scope.isActive) {
       try {
         if (!SignalStore.account.isRegistered) {
-          delay(5_000)
-          continue
+          Log.i(TAG, "Account is no longer registered; stopping the embedded ntfy listener")
+          stopSelf()
+          return
         }
         val result = AppDependencies.accountApiV2.registerNtfyTopic()
         if (result !is RequestResult.Success) {
