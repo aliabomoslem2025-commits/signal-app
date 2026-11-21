@@ -11,6 +11,7 @@ import java.net.URI
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Base64
 import java.util.Locale
 import java.util.Properties
 
@@ -37,13 +38,32 @@ val lanCrypto = lanDocument["crypto"] as Map<*, *>
 fun lanService(key: String): String = (lanServices[key] as String).trim().trimEnd('/')
 fun lanCryptoValue(key: String): String = (lanCrypto[key] as? String).orEmpty()
 fun lanQuoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+fun isValidLanTrustRoot(value: Any?): Boolean {
+  if (value !is String || value.isBlank()) return false
+  return runCatching {
+    val normalized = value.trim()
+    val padded = normalized + "=".repeat((4 - normalized.length % 4) % 4)
+    Base64.getDecoder().decode(padded).size == 33
+  }.getOrDefault(false)
+}
 val lanCertificate = (lanSecurity["trustedCaPem"] as? String).orEmpty()
 if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) || it.contains("lanRelease", ignoreCase = true) }) {
-  require(lanCertificate.contains("-----BEGIN CERTIFICATE-----")) { "Release blocked: configure a real private LAN CA in server-config.json" }
-  require(listOf("zkGroupServerPublicParams", "genericServerPublicParams", "backupServerPublicParams", "svr2MrEnclave").all { lanCryptoValue(it).isNotBlank() }) {
-    "Release blocked: set all cryptographic public parameters from YOUR Signal Server"
+  require(lanCertificate.contains("-----BEGIN CERTIFICATE-----") && lanCertificate.contains("-----END CERTIFICATE-----")) {
+    "Release blocked: configure the real private LAN CA certificate in server-config.json"
   }
-  require(lanServices.values.all { (it as String).startsWith("https://") && !(it as String).contains("example.invalid") }) { "Release blocked: all services must use LAN HTTPS URLs" }
+  require(listOf("zkGroupServerPublicParams", "genericServerPublicParams", "backupServerPublicParams").all { lanCryptoValue(it).isNotBlank() }) {
+    "Release blocked: set all ZK public parameters from YOUR Signal Server"
+  }
+  require(lanCryptoValue("svr2MrEnclave").matches(Regex("[0-9a-fA-F]{64}"))) {
+    "Release blocked: svr2MrEnclave must be the real 64-hex measurement from your deployed SVR2 enclave"
+  }
+  val lanTrustRoots = lanCrypto["unidentifiedSenderTrustRoots"] as? List<*> ?: emptyList<Any>()
+  require(lanTrustRoots.isNotEmpty() && lanTrustRoots.all(::isValidLanTrustRoot)) {
+    "Release blocked: unidentifiedSenderTrustRoots must contain valid 33-byte public keys from your own server"
+  }
+  require(lanServices.values.all { (it as String).startsWith("https://") && !(it as String).contains("example.invalid") }) {
+    "Release blocked: all services must use LAN HTTPS URLs"
+  }
 }
 
 val staticIps = Properties().apply { file("static-ips.properties").reader().use { load(it) } }
