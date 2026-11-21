@@ -46,7 +46,10 @@ class NtfyPushService : SafeForegroundService() {
     private const val MAX_BACKOFF_SECONDS = 60L
 
     @JvmStatic
-    fun start(context: android.content.Context): Boolean = SafeForegroundService.start(context, NtfyPushService::class.java)
+    fun start(context: android.content.Context): Boolean {
+      if (!SignalStore.account.isRegistered) return false
+      return SafeForegroundService.start(context, NtfyPushService::class.java)
+    }
 
     @JvmStatic
     fun stop(context: android.content.Context): Boolean = SafeForegroundService.stop(context, NtfyPushService::class.java)
