@@ -1359,27 +1359,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <service
-            android:name=".gcm.FcmFetchBackgroundService"
-            android:exported="false" />
-
-        <service
-            android:name=".gcm.FcmFetchForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="remoteMessaging" />
-
-        <!-- ntfy is embedded: no Firebase Messaging service is exported or registered. -->
+        <!-- Embedded ntfy subscriber; no Firebase Messaging receiver or service is registered. -->
         <service
             android:name=".push.NtfyPushService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
-
-        <service
-            android:name=".gcm.FcmJobService"
-            android:enabled="@bool/enable_job_service"
-            android:exported="false"
-            android:permission="android.permission.BIND_JOB_SERVICE"
-            tools:targetApi="26" />
 
         <service
             android:name=".jobmanager.JobSchedulerScheduler$SystemService"
