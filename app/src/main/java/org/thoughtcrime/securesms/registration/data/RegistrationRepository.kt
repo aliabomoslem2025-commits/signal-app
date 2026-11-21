@@ -50,6 +50,7 @@ import org.thoughtcrime.securesms.jobs.PreKeysSyncJob
 import org.thoughtcrime.securesms.jobs.RefreshOwnProfileJob
 import org.thoughtcrime.securesms.jobs.RotateCertificateJob
 import org.thoughtcrime.securesms.keyvalue.SignalStore
+import org.thoughtcrime.securesms.push.NtfyPushService
 import org.thoughtcrime.securesms.net.SignalNetwork
 import org.thoughtcrime.securesms.pin.Svr3Migration
 import org.thoughtcrime.securesms.pin.SvrRepository
@@ -225,7 +226,7 @@ object RegistrationRepository {
     SignalStore.account.setRegistered(registered = true, isAciChanged = isAciChanged)
     SignalStore.registration.hasPromptedPushRegistration = true
     // Start ntfy only after the authenticated account/device state is durably persisted.
-    org.thoughtcrime.securesms.push.NtfyPushService.start(context)
+    NtfyPushService.start(context)
     SignalStore.account.isUnauthorizedReceived = false
 
     val masterKey = data.masterKey?.let { MasterKey(it.toByteArray()) }
