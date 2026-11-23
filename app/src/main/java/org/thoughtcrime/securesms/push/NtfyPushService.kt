@@ -27,9 +27,9 @@ import org.thoughtcrime.securesms.jobs.MessageFetchJob
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import java.io.IOException
-import java.security.MessageDigest
 import java.net.URL
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
