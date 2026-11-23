@@ -26,7 +26,6 @@ import org.signal.core.models.recipients.RecipientId
 import org.signal.core.util.Base64
 import org.signal.core.util.PinHashUtil
 import org.signal.core.util.crypto.DeviceNameCipher
-import org.signal.core.util.eventbus.EventBus
 import org.signal.core.util.logging.Log
 import org.signal.libsignal.protocol.IdentityKeyPair
 import org.signal.libsignal.protocol.util.KeyHelper
@@ -52,6 +51,7 @@ import org.thoughtcrime.securesms.jobs.RefreshOwnProfileJob
 import org.thoughtcrime.securesms.jobs.RotateCertificateJob
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.net.SignalNetwork
+import org.thoughtcrime.securesms.push.NtfyPushService
 import org.thoughtcrime.securesms.pin.Svr3Migration
 import org.thoughtcrime.securesms.pin.SvrRepository
 import org.thoughtcrime.securesms.pin.SvrWrongPinException
@@ -68,7 +68,6 @@ import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionC
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionCreationResult
 import org.thoughtcrime.securesms.registration.data.network.RegistrationSessionResult
 import org.thoughtcrime.securesms.registration.data.network.VerificationCodeRequestResult
-import org.thoughtcrime.securesms.registration.fcm.PushChallengeRequest
 import org.thoughtcrime.securesms.registration.local.LocalDeviceAuthClient
 import org.thoughtcrime.securesms.registration.viewmodel.SvrAuthCredentialSet
 import org.thoughtcrime.securesms.service.DirectoryRefreshListener
@@ -84,12 +83,9 @@ import org.whispersystems.signalservice.api.svr.Svr3Credentials
 import org.whispersystems.signalservice.internal.push.AuthCredentials
 import org.whispersystems.signalservice.internal.push.ProvisionMessage
 import org.whispersystems.signalservice.internal.push.PushServiceSocket
-import org.whispersystems.signalservice.internal.push.RegistrationSessionMetadataResponse
 import org.whispersystems.signalservice.internal.push.VerifyAccountResponse
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -102,10 +98,8 @@ object RegistrationRepository {
 
   private val TAG = Log.tag(RegistrationRepository::class.java)
 
-  private val PUSH_REQUEST_TIMEOUT = 5.seconds.inWholeMilliseconds
-
   /**
-   * Retrieve the FCM token from the Firebase service.
+   * Legacy registration API compatibility; this LAN build uses the authenticated ntfy topic after login.
    */
   suspend fun getFcmToken(context: Context): String? = null
 
@@ -231,6 +225,8 @@ object RegistrationRepository {
     SignalStore.account.setServicePassword(data.servicePassword)
     SignalStore.account.setRegistered(registered = true, isAciChanged = isAciChanged)
     SignalStore.registration.hasPromptedPushRegistration = true
+    // Start ntfy only after the authenticated account/device state is durably persisted.
+    NtfyPushService.start(context)
     SignalStore.account.isUnauthorizedReceived = false
 
     val masterKey = data.masterKey?.let { MasterKey(it.toByteArray()) }
@@ -543,41 +539,6 @@ object RegistrationRepository {
       }
   }
 
-  private suspend fun createSessionAndBlockForPushChallenge(accountManager: RegistrationApi, fcmToken: String, mcc: String?, mnc: String?): NetworkResult<RegistrationSessionMetadataResponse> = withContext(Dispatchers.IO) {
-    // TODO [regv2]: do not use event bus nor latch
-    val subscriber = PushTokenChallengeSubscriber()
-    val subscription = EventBus.default.subscribe<PushChallengeRequest.PushChallengeEvent>(handler = subscriber::onChallengeEvent)
-
-    try {
-      Log.d(TAG, "Requesting a registration session with FCM token…")
-      val sessionCreationResponse = accountManager.createRegistrationSession(fcmToken, mcc, mnc)
-      if (sessionCreationResponse !is NetworkResult.Success) {
-        return@withContext sessionCreationResponse
-      }
-
-      val receivedPush = subscriber.latch.await(PUSH_REQUEST_TIMEOUT, TimeUnit.MILLISECONDS)
-
-      if (receivedPush) {
-        val challenge = subscriber.challenge
-        if (challenge != null) {
-          Log.i(TAG, "Push challenge token received.")
-          return@withContext accountManager.submitPushChallengeToken(sessionCreationResponse.result.metadata.id, challenge)
-        } else {
-          Log.w(TAG, "Push received but challenge token was null.")
-        }
-      } else {
-        Log.i(TAG, "Push challenge timed out.")
-      }
-      Log.i(TAG, "Push challenge unsuccessful. Continuing with session created without one.")
-      return@withContext sessionCreationResponse
-    } catch (ex: Exception) {
-      Log.w(TAG, "Exception caught, but the earlier try block should have caught it?", ex)
-      return@withContext NetworkResult.ApplicationError<RegistrationSessionMetadataResponse>(ex)
-    } finally {
-      subscription.unsubscribe()
-    }
-  }
-
   suspend fun hasValidSvrAuthCredentials(context: Context, e164: String, password: String): BackupAuthCheckResult = withContext(Dispatchers.IO) {
     val api: RegistrationApi = AccountManagerFactory.getInstance().createUnauthenticated(context, e164, SignalServiceAddress.DEFAULT_DEVICE_ID, password).registrationApi
 
@@ -736,16 +697,5 @@ object RegistrationRepository {
     SMS_WITH_LISTENER(true, PushServiceSocket.VerificationCodeTransport.SMS),
     SMS_WITHOUT_LISTENER(false, PushServiceSocket.VerificationCodeTransport.SMS),
     PHONE_CALL(false, PushServiceSocket.VerificationCodeTransport.VOICE)
-  }
-
-  private class PushTokenChallengeSubscriber {
-    var challenge: String? = null
-    val latch = CountDownLatch(1)
-
-    fun onChallengeEvent(pushChallengeEvent: PushChallengeRequest.PushChallengeEvent) {
-      Log.d(TAG, "Push challenge received!")
-      challenge = pushChallengeEvent.challenge
-      latch.countDown()
-    }
   }
 }

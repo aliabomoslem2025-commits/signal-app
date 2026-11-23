@@ -14,7 +14,6 @@ import org.signal.core.util.serialization.ECPublicKeyToBase64Serializer
 import org.signal.core.util.serialization.KEMPublicKeyToBase64Serializer
 import org.signal.core.util.serialization.SignalJson
 import org.signal.libsignal.net.AuthAccountsService
-import org.signal.libsignal.net.AuthDevicesService
 import org.signal.libsignal.net.AuthUsernamesService
 import org.signal.libsignal.net.BadRequestError
 import org.signal.libsignal.net.ConfirmTotpKeyError
@@ -109,25 +108,6 @@ class AccountApiV2(private val authWebSocket: SignalWebSocket.AuthenticatedWebSo
       parseSuccess = { },
       mapError = { null }
     )
-  }
-
-  /**
-   * Sets the FCM push token the server should use to notify this device of new messages.
-   */
-  suspend fun setFcmToken(fcmToken: String): RequestResult<Unit, Nothing> {
-    return authWebSocket.runCatchingWithChatConnection { connection ->
-      AuthDevicesService(connection).setPushToken(fcmToken)
-    }
-  }
-
-  /**
-   * Removes any push tokens associated with this device. Afterwards, the server will assume this device
-   * polls for new messages over an open websocket.
-   */
-  suspend fun clearFcmToken(): RequestResult<Unit, Nothing> {
-    return authWebSocket.runCatchingWithChatConnection { connection ->
-      AuthDevicesService(connection).clearPushToken()
-    }
   }
 
   /**
