@@ -43,12 +43,23 @@ object SvrRepository {
 
   val TAG = Log.tag(SvrRepository::class.java)
 
-  private val svr2Legacy: SecureValueRecovery? = if (BuildConfig.SVR2_MRENCLAVE_LEGACY.isNullOrEmpty() || BuildConfig.SVR2_MRENCLAVE_LEGACY == BuildConfig.SVR2_MRENCLAVE) {
+  private val svr2Legacy: SecureValueRecovery? = if (BuildConfig.LAN_NO_ENCLAVE || BuildConfig.SVR2_MRENCLAVE_LEGACY.isNullOrEmpty() || BuildConfig.SVR2_MRENCLAVE_LEGACY == BuildConfig.SVR2_MRENCLAVE) {
     null
   } else {
     AppDependencies.signalServiceAccountManager.getSecureValueRecoveryV2(BuildConfig.SVR2_MRENCLAVE_LEGACY)
   }
-  private val svr2: SecureValueRecovery = AppDependencies.signalServiceAccountManager.getSecureValueRecoveryV2(BuildConfig.SVR2_MRENCLAVE)
+  private val svr2: SecureValueRecovery = if (BuildConfig.LAN_NO_ENCLAVE) {
+    LanSecureValueRecovery(AppDependencies.application) {
+      // Only the existing account-authenticated credential endpoint is reused.
+      // The software implementation never opens an SVR2 enclave socket.
+      AppDependencies.signalServiceAccountManager.getSecureValueRecoveryV2("").authorization()
+    }
+  } else {
+    AppDependencies.signalServiceAccountManager.getSecureValueRecoveryV2(BuildConfig.SVR2_MRENCLAVE)
+  }
+
+  @JvmStatic
+  fun primaryImplementation(): SecureValueRecovery = svr2
 
   /** An ordered list of SVR implementations to read from and write to. They should be in priority order, with the most important one listed first. */
   private val svr2Implementations: List<SecureValueRecovery> = listOfNotNull(svr2, svr2Legacy)
@@ -426,3 +437,4 @@ object SvrRepository {
         !SignalStore.svr.hasOptedOut()
     }
 }
+

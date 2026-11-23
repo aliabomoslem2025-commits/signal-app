@@ -94,7 +94,7 @@ public final class CdsiV2Service {
 
   private static Response parseLibsignalResponse(CdsiLookupResponse response) {
     HashMap<String, ResponseItem> responses = new HashMap<>(response.entries().size());
-    response.entries().forEach((key, value) -> responses.put(key, new ResponseItem(new PNI(value.pni), Optional.ofNullable(value.aci).map(ACI::new))));
+    response.entries().forEach((key, value) -> responses.put(key, new ResponseItem(PNI.from(value.pni), Optional.ofNullable(value.aci).map(ACI::from))));
     return new Response(responses, response.debugPermitsUsed);
   }
 
@@ -186,3 +186,4 @@ public final class CdsiV2Service {
     Observable<Response> handleRequest(String username, String password, Request request, Consumer<byte[]> tokenSaver);
   }
 }
+

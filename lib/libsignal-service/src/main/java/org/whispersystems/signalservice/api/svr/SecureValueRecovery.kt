@@ -140,6 +140,8 @@ interface SecureValueRecovery {
 
   enum class SvrVersion {
     SVR2,
-    SVR3
+    SVR3,
+    SOFTWARE_LAN
   }
 }
+

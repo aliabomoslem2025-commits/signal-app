@@ -35,6 +35,9 @@ val lanDocument = groovy.json.JsonSlurper().parseText(file("src/main/assets/serv
 val lanServices = lanDocument["services"] as Map<*, *>
 val lanSecurity = lanDocument["security"] as Map<*, *>
 val lanCrypto = lanDocument["crypto"] as Map<*, *>
+val lanCapabilities = lanDocument["capabilities"] as? Map<*, *> ?: emptyMap<Any, Any>()
+val lanNoEnclave = lanCapabilities["pinRecovery"] == "SOFTWARE_LAN_V1" && lanCapabilities["contactDiscovery"] == "AUTHENTICATED_LAN"
+require(lanCapabilities.isEmpty() || lanNoEnclave) { "Unknown or mixed LAN service profile" }
 fun lanService(key: String): String = (lanServices[key] as String).trim().trimEnd('/')
 fun lanCryptoValue(key: String): String = (lanCrypto[key] as? String).orEmpty()
 fun lanQuoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -54,8 +57,10 @@ if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = tr
   require(listOf("zkGroupServerPublicParams", "genericServerPublicParams", "backupServerPublicParams").all { lanCryptoValue(it).isNotBlank() }) {
     "Release blocked: set all ZK public parameters from YOUR Signal Server"
   }
-  require(lanCryptoValue("svr2MrEnclave").matches(Regex("[0-9a-fA-F]{64}"))) {
-    "Release blocked: svr2MrEnclave must be the real 64-hex measurement from your deployed SVR2 enclave"
+  if (!lanNoEnclave) {
+    require(lanCryptoValue("svr2MrEnclave").matches(Regex("[0-9a-fA-F]{64}"))) {
+      "Release blocked: attested SVR2 requires the real deployed enclave measurement"
+    }
   }
   val lanTrustRoots = lanCrypto["unidentifiedSenderTrustRoots"] as? List<*> ?: emptyList<Any>()
   require(lanTrustRoots.isNotEmpty() && lanTrustRoots.all(::isValidLanTrustRoot)) {
@@ -330,6 +335,7 @@ android {
     buildConfigField("String[]", "SIGNAL_CDSI_IPS", "new String[]{}")
     buildConfigField("String[]", "SIGNAL_SVR2_IPS", "new String[]{}")
     buildConfigField("String", "SIGNAL_AGENT", "\"OWA\"")
+    buildConfigField("boolean", "LAN_NO_ENCLAVE", lanNoEnclave.toString())
     buildConfigField("String", "SVR2_MRENCLAVE_LEGACY", lanQuoted(lanCryptoValue("svr2MrEnclave")))
     buildConfigField("String", "SVR2_MRENCLAVE", lanQuoted(lanCryptoValue("svr2MrEnclave")))
     buildConfigField("String[]", "UNIDENTIFIED_SENDER_TRUST_ROOTS", "new String[]{${(lanCrypto["unidentifiedSenderTrustRoots"] as List<*>).joinToString(",") { lanQuoted(it as String) }}}")
@@ -1240,3 +1246,4 @@ abstract class RenameApkTask : DefaultTask() {
     }
   }
 }
+

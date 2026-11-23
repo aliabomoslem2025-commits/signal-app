@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lan_software_recovery_notice">Your account key is encrypted on this device and stored on your local server. This server does not use hardware attestation. Choose a long passphrase: a compromised server could guess a short PIN.</string>
+</resources>
