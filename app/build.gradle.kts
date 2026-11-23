@@ -1246,4 +1246,3 @@ abstract class RenameApkTask : DefaultTask() {
     }
   }
 }
-
