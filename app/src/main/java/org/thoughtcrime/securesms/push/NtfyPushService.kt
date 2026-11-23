@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.util.Base64
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ import org.thoughtcrime.securesms.jobs.MessageFetchJob
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import java.io.IOException
+import java.security.MessageDigest
 import java.net.URL
 import java.security.KeyStore
 import javax.net.ssl.HttpsURLConnection
@@ -59,6 +61,7 @@ class NtfyPushService : SafeForegroundService() {
   override val notificationId: Int get() = FOREGROUND_ID
 
   private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+  private val cursorPreferences by lazy { getSharedPreferences("ntfy_push_cursor", android.content.Context.MODE_PRIVATE) }
   private var running: Job? = null
 
   @Volatile private var connection: HttpsURLConnection? = null
@@ -104,7 +107,7 @@ class NtfyPushService : SafeForegroundService() {
   private suspend fun subscribeLoop() {
     var backoff = 2L
     var lastMessageId: String? = null
-    var previousTopic: String? = null
+    var currentTopicFingerprint: String? = null
     while (scope.isActive) {
       try {
         if (!SignalStore.account.isRegistered) {
@@ -117,12 +120,19 @@ class NtfyPushService : SafeForegroundService() {
           throw IOException("Could not provision private ntfy topic")
         }
         val topic = result.result
-        if (previousTopic != topic) {
-          lastMessageId = null
-          previousTopic = topic
+        val fingerprint = topicFingerprint(topic)
+        if (currentTopicFingerprint != fingerprint) {
+          currentTopicFingerprint = fingerprint
+          if (cursorPreferences.getString("topic_fingerprint", null) == fingerprint) {
+            // Resume after process/service restarts without persisting the bearer topic itself.
+            lastMessageId = cursorPreferences.getString("last_event_id", null)
+          } else {
+            lastMessageId = null
+            cursorPreferences.edit().clear().putString("topic_fingerprint", fingerprint).apply()
+          }
         }
         backoff = 2L
-        lastMessageId = consumeStream(topic, lastMessageId)
+        lastMessageId = consumeStream(topic, lastMessageId, fingerprint)
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (e: Exception) {
@@ -135,6 +145,11 @@ class NtfyPushService : SafeForegroundService() {
     }
   }
 
+  private fun topicFingerprint(topic: String): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(topic.toByteArray(Charsets.UTF_8))
+    return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+  }
+
   private fun configureTrust(conn: HttpsURLConnection) {
     val trustStore = LocalServerTrustStore(this)
     val store = KeyStore.getInstance("PKCS12")
@@ -144,7 +159,7 @@ class NtfyPushService : SafeForegroundService() {
     // The default platform hostname verifier remains unchanged.
   }
 
-  private fun consumeStream(topic: String, resumeFrom: String?): String? {
+  private fun consumeStream(topic: String, resumeFrom: String?, topicFingerprint: String): String? {
     // The per-device topic is a high-entropy capability assigned only after
     // authenticated registration. It is not embedded in the APK or logs.
     val base = LocalServerConfig.load(this).ntfyBaseUrl
@@ -173,13 +188,19 @@ class NtfyPushService : SafeForegroundService() {
           if (event.optString("event") != "message") continue
           val eventId = event.optString("id")
           if (eventId.isNotBlank() && eventId == last) continue
-          if (eventId.isNotBlank()) last = eventId
           when (event.optString("message")) {
             "wake" -> AppDependencies.jobManager.add(MessageFetchJob())
             else -> {
               // No message contents, credentials or link previews are read
               // from ntfy. Other control events are intentionally ignored.
             }
+          }
+          if (eventId.isNotBlank()) {
+            last = eventId
+            cursorPreferences.edit()
+              .putString("topic_fingerprint", topicFingerprint)
+              .putString("last_event_id", eventId)
+              .apply()
           }
         }
       }
