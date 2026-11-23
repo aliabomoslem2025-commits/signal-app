@@ -24,7 +24,7 @@ import java.util.UUID
 class LanSecureValueRecovery(context: Context, private val fetchAuthorization: () -> AuthCredentials) : SecureValueRecovery {
   private val app = context.applicationContext
   private val http by lazy { LanHttpClient(app) }
-  private val origin get() = LocalServerConfig.load(app).svr2Url
+  private val origin get() = LocalServerConfig.load(app).localAuthApiUrl
 
   override val svrVersion = SvrVersion.SOFTWARE_LAN
 
