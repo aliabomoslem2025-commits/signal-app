@@ -117,7 +117,7 @@ class NtfyPushService : SafeForegroundService() {
         }
         currentCoroutineContext().ensureActive()
         val topic = result.result
-        require(topic.matches(Regex("signal-[a-zA-Z0-9_-]+"))) { "Invalid LAN notification topic" }
+        require(topic.matches(Regex("signal-[A-Za-z0-9_-]{32,64}"))) { "Invalid LAN notification topic" }
         if (previousTopic != topic) {
           lastMessageId = null
           previousTopic = topic
@@ -169,10 +169,12 @@ class NtfyPushService : SafeForegroundService() {
     connection = conn
     var last = resumeFrom
     try {
+      context.ensureActive()
       if (conn.responseCode != 200) throw IOException("ntfy subscription failed (HTTP ${conn.responseCode})")
       conn.inputStream.bufferedReader().use { reader ->
         while (context.isActive) {
           val line = reader.readLine() ?: break
+          context.ensureActive()
           if (!line.startsWith("data:")) continue
           val body = line.removePrefix("data:").trim()
           val event = try { JSONObject(body) } catch (_: Exception) { continue }
