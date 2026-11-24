@@ -55,6 +55,9 @@ for value in ("AndroidKeyStore", "SHA256withECDSA", "signal-local-auth-v1", "sig
 check("localAuth.isCompletedSession(sessionId)" in controller, "Registration must verify completed signed session")
 check("registerNtfyTopic()" in ntfy and "MessageFetchJob()" in ntfy, "ntfy must receive opaque wake and fetch Signal messages")
 check("FirebaseMessaging" not in ntfy and "FirebaseApp" not in ntfy, "ntfy must not depend on Firebase")
+for transport in (client, ntfy):
+    check("instanceFollowRedirects = false" in transport, "LAN auth and ntfy redirects must be disabled")
+    check("openConnection(Proxy.NO_PROXY)" in transport, "LAN auth and ntfy must not use a system HTTP proxy")
 
 network = read("app/src/main/java/org/thoughtcrime/securesms/push/SignalServiceNetworkAccess.kt")
 check("val DNS: Dns = Dns.SYSTEM" in network, "System DNS required")

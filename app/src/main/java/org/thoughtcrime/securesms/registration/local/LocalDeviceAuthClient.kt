@@ -11,6 +11,7 @@ import org.signal.registration.LanPasswordInvalidException
 import org.signal.registration.LocalAuthCodeBus
 import org.thoughtcrime.securesms.push.LocalServerTrustStore
 import java.net.HttpURLConnection
+import java.net.Proxy
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
@@ -118,7 +119,8 @@ class LocalDeviceAuthClient(context: Context) {
   private fun post(path: String, body: JSONObject): JSONObject {
     val url = URL(config.localAuthApiUrl + path)
     require(url.protocol.equals("https", true)) { "Local authentication must use HTTPS" }
-    val connection = (url.openConnection() as HttpsURLConnection).apply {
+    val connection = (url.openConnection(Proxy.NO_PROXY) as HttpsURLConnection).apply {
+      instanceFollowRedirects = false
       // Java's platform hostname verification stays enabled; only the explicit
       // bundled LAN CA is trusted. Do not disable certificate validation.
       val trustStore = LocalServerTrustStore(app)
@@ -140,6 +142,7 @@ class LocalDeviceAuthClient(context: Context) {
     try {
       connection.outputStream.use { it.write(body.toString().toByteArray(StandardCharsets.UTF_8)) }
       val status = connection.responseCode
+      if (status in 300..399) throw IllegalStateException("LAN authentication redirects are forbidden")
       val stream = if (status in 200..299) connection.inputStream else connection.errorStream
       val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
       val parsed = if (response.isBlank()) JSONObject() else JSONObject(response)

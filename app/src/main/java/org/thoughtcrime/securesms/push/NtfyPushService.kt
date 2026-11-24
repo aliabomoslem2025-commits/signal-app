@@ -15,6 +15,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.signal.core.util.SafeForegroundService
@@ -26,6 +28,7 @@ import org.thoughtcrime.securesms.jobs.MessageFetchJob
 import org.thoughtcrime.securesms.keyvalue.SignalStore
 import org.thoughtcrime.securesms.registration.local.LocalServerConfig
 import java.io.IOException
+import java.net.Proxy
 import java.net.URL
 import java.security.KeyStore
 import javax.net.ssl.HttpsURLConnection
@@ -102,7 +105,7 @@ class NtfyPushService : SafeForegroundService() {
     var backoff = 2L
     var lastMessageId: String? = null
     var previousTopic: String? = null
-    while (scope.isActive) {
+    while (currentCoroutineContext().isActive) {
       try {
         if (!SignalStore.account.isRegistered) {
           delay(5_000)
@@ -112,20 +115,24 @@ class NtfyPushService : SafeForegroundService() {
         if (result !is RequestResult.Success) {
           throw IOException("Could not provision private ntfy topic")
         }
+        currentCoroutineContext().ensureActive()
         val topic = result.result
+        require(topic.matches(Regex("signal-[a-zA-Z0-9_-]+"))) { "Invalid LAN notification topic" }
         if (previousTopic != topic) {
           lastMessageId = null
           previousTopic = topic
         }
-        backoff = 2L
-        lastMessageId = consumeStream(topic, lastMessageId)
+        consumeStream(topic, lastMessageId) { eventId ->
+          lastMessageId = eventId
+          backoff = 2L
+        }
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (e: Exception) {
         // Do not log the private ntfy topic, URL with topic, or any auth token.
         Log.w(TAG, "Local ntfy stream interrupted; reconnecting")
       }
-      if (!scope.isActive) break
+      if (!currentCoroutineContext().isActive) break
       delay(backoff * 1000)
       backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
     }
@@ -140,13 +147,16 @@ class NtfyPushService : SafeForegroundService() {
     // The default platform hostname verifier remains unchanged.
   }
 
-  private fun consumeStream(topic: String, resumeFrom: String?): String? {
+  private suspend fun consumeStream(topic: String, resumeFrom: String?, onEvent: (String) -> Unit) {
+    val context = currentCoroutineContext()
+    context.ensureActive()
     // The per-device topic is a high-entropy capability assigned only after
     // authenticated registration. It is not embedded in the APK or logs.
     val base = LocalServerConfig.load(this).ntfyBaseUrl
     val since = resumeFrom?.let { "?since=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "?since=all"
     val url = URL("$base/$topic/sse$since")
-    val conn = (url.openConnection() as HttpsURLConnection).apply {
+    val conn = (url.openConnection(Proxy.NO_PROXY) as HttpsURLConnection).apply {
+      instanceFollowRedirects = false
       configureTrust(this)
       requestMethod = "GET"
       connectTimeout = 10_000
@@ -161,7 +171,7 @@ class NtfyPushService : SafeForegroundService() {
     try {
       if (conn.responseCode != 200) throw IOException("ntfy subscription failed (HTTP ${conn.responseCode})")
       conn.inputStream.bufferedReader().use { reader ->
-        while (scope.isActive) {
+        while (context.isActive) {
           val line = reader.readLine() ?: break
           if (!line.startsWith("data:")) continue
           val body = line.removePrefix("data:").trim()
@@ -169,7 +179,6 @@ class NtfyPushService : SafeForegroundService() {
           if (event.optString("event") != "message") continue
           val eventId = event.optString("id")
           if (eventId.isNotBlank() && eventId == last) continue
-          if (eventId.isNotBlank()) last = eventId
           when (event.optString("message")) {
             "wake" -> AppDependencies.jobManager.add(MessageFetchJob())
             else -> {
@@ -177,12 +186,15 @@ class NtfyPushService : SafeForegroundService() {
               // from ntfy. Other control events are intentionally ignored.
             }
           }
+          if (eventId.isNotBlank()) {
+            last = eventId
+            onEvent(eventId)
+          }
         }
       }
     } finally {
       conn.disconnect()
       if (connection === conn) connection = null
     }
-    return last
   }
 }
