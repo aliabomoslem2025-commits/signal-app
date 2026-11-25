@@ -50,7 +50,7 @@ class LocalAuthSessionIdTest {
   @Test
   fun `rejects malformed completed session envelopes`() {
     assertThat(LocalAuthSessionId.isCompletedSession("LAN1.not-valid!!", now)).isFalse()
-    assertThat(LocalAuthSessionId.isCompletedSession("LOCAL1.not-valid", now)).isFalse()
+    assertThat(LocalAuthSessionId.isCompletedSession(encodeUrlBase64("not-a-ticket".toByteArray()), now)).isFalse()
   }
 
   @Test
@@ -119,7 +119,7 @@ class LocalAuthSessionIdTest {
     val signature = encodeUrlBase64(ByteArray(signatureBytes) { 0x5a.toByte() })
     val ticket = "lan1.$payload.$signature"
     val envelope = "LAN1.$ticket"
-    return "LAN1." + encodeUrlBase64(envelope.toByteArray(StandardCharsets.UTF_8))
+    return encodeUrlBase64(envelope.toByteArray(StandardCharsets.UTF_8))
   }
 
   private fun challengeSessionId(

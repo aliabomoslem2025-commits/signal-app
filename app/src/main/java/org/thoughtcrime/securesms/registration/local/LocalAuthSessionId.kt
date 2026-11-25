@@ -22,6 +22,7 @@ internal object LocalAuthSessionId {
   private const val COMPLETED_PREFIX = "LAN1."
   private const val MAX_SESSION_ID_LENGTH = 8192
   private const val MAX_TICKET_LENGTH = 4096
+  private const val MAX_ENVELOPE_BYTES = MAX_TICKET_LENGTH + COMPLETED_PREFIX.length
   private const val MAX_CHALLENGE_STATE_BYTES = 2048
   private const val MAX_TICKET_CLAIMS_BYTES = 2048
   private const val SIGNATURE_BYTES = 32
@@ -83,13 +84,14 @@ internal object LocalAuthSessionId {
     id: String,
     nowEpochSeconds: Long = System.currentTimeMillis() / 1000
   ): Boolean {
-    if (!id.startsWith(COMPLETED_PREFIX) || id.length > MAX_SESSION_ID_LENGTH) {
+    if (id.isEmpty() || id.length > MAX_SESSION_ID_LENGTH) {
       return false
     }
 
     return try {
-      val encodedEnvelope = id.removePrefix(COMPLETED_PREFIX)
-      val envelopeBytes = decodeRawUrlBase64(encodedEnvelope, MAX_TICKET_LENGTH) ?: return false
+      // The server's sessionId is the raw Base64URL encoding of "LAN1." + ticket.
+      // Unlike challenge IDs, the completed session ID itself has no textual prefix.
+      val envelopeBytes = decodeRawUrlBase64(id, MAX_ENVELOPE_BYTES) ?: return false
       val envelope = String(envelopeBytes, StandardCharsets.UTF_8)
       if (!envelope.startsWith(COMPLETED_PREFIX)) return false
 
