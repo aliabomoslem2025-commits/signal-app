@@ -14,6 +14,7 @@ import assertk.assertions.isTrue
 import assertk.assertions.prop
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -92,6 +93,120 @@ class VerificationCodeViewModelTest {
   @After
   fun tearDown() {
     Dispatchers.resetMain()
+  }
+
+  @Test
+  fun `local auth completion persists the issued ticket before Java registration`() = runTest {
+    val challenge = createSessionMetadata(id = "local-challenge")
+    val ticket = createSessionMetadata(id = "completed-ticket", verified = true)
+    parentState.value = RegistrationFlowState(
+      sessionMetadata = challenge,
+      sessionE164 = "+15551234567",
+      isRestoringNavigationState = false
+    )
+
+    every { mockRepository.isLocalAuthEnabled() } returns true
+    coEvery { mockRepository.submitLocalVerificationCode(challenge.id, "123456", "local-password", "") } returns
+      RequestResult.Success(ticket)
+    coEvery { mockRepository.registerAccountWithSession(any(), any(), any(), any(), any()) } returns
+      RequestResult.Success(
+        RegisteredAccountData(
+          createRegisterAccountResponse(storageCapable = false),
+          mockk<KeyMaterial>(relaxed = true),
+          testAci
+        )
+      )
+
+    advanceUntilIdle()
+
+    viewModel.applyEvent(
+      VerificationCodeState(
+        sessionMetadata = challenge,
+        e164 = "+15551234567",
+        localAuth = true,
+        localPasswordSetupRequired = false,
+        pendingLocalCode = "123456"
+      ),
+      VerificationCodeScreenEvents.LocalPasswordSubmitted("local-password", ""),
+      stateEmitter
+    )
+
+    coVerify {
+      mockRepository.saveFlowState(
+        match {
+          it.sessionMetadata?.id == ticket.id &&
+            it.sessionMetadata?.verified == true &&
+            it.submittedVerificationCode == "123456"
+        }
+      )
+    }
+    assertThat(emittedEvents[0]).isInstanceOf<RegistrationFlowEvent.SessionUpdated>()
+    assertThat(emittedEvents[1]).isInstanceOf<RegistrationFlowEvent.VerificationCodeAccepted>()
+  }
+
+  @Test
+  fun `restored verified local auth ticket resumes registration without completing challenge again`() = runTest {
+    val ticket = createSessionMetadata(id = "restored-ticket", verified = true)
+    val restoredParentState = MutableStateFlow(
+      RegistrationFlowState(
+        sessionMetadata = ticket,
+        sessionE164 = "+15551234567",
+        isRestoringNavigationState = false
+      )
+    )
+    val registerResponse = createRegisterAccountResponse(storageCapable = false)
+
+    every { mockRepository.isLocalAuthEnabled() } returns true
+    coEvery { mockRepository.registerAccountWithSession(any(), any(), any(), any(), any()) } returns
+      RequestResult.Success(
+        RegisteredAccountData(registerResponse, mockk<KeyMaterial>(relaxed = true), testAci)
+      )
+
+    viewModel = VerificationCodeViewModel(mockRepository, restoredParentState, parentEventEmitter)
+    advanceUntilIdle()
+
+    coVerify(exactly = 1) {
+      mockRepository.registerAccountWithSession(
+        e164 = "+15551234567",
+        sessionId = ticket.id,
+        skipDeviceTransfer = true,
+        preExistingRegistrationData = null
+      )
+    }
+    coVerify(exactly = 0) { mockRepository.submitLocalVerificationCode(any(), any(), any(), any()) }
+  }
+
+  @Test
+  fun `foreground retries a persisted verified local auth ticket after a network failure`() = runTest {
+    val ticket = createSessionMetadata(id = "retry-ticket", verified = true)
+    val registerResponse = createRegisterAccountResponse(storageCapable = false)
+
+    every { mockRepository.isLocalAuthEnabled() } returns true
+    coEvery { mockRepository.validateSession(ticket.id) } returns ticket
+    coEvery { mockRepository.registerAccountWithSession(any(), any(), any(), any(), any()) } returns
+      RequestResult.Success(
+        RegisteredAccountData(registerResponse, mockk<KeyMaterial>(relaxed = true), testAci)
+      )
+
+    viewModel.applyEvent(
+      VerificationCodeState(
+        sessionMetadata = ticket,
+        e164 = "+15551234567",
+        localAuth = true,
+        snackbars = VerificationCodeState.Snackbars(networkError = true)
+      ),
+      VerificationCodeScreenEvents.Foregrounded,
+      stateEmitter
+    )
+
+    coVerify {
+      mockRepository.registerAccountWithSession(
+        e164 = "+15551234567",
+        sessionId = ticket.id,
+        skipDeviceTransfer = true,
+        preExistingRegistrationData = null
+      )
+    }
   }
 
   // ==================== ParentStateChanged Tests ====================

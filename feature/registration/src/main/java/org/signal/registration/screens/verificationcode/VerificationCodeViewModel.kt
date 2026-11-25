@@ -33,6 +33,7 @@ import org.signal.network.api.RegistrationApiV2.RequestVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.SessionMetadata
 import org.signal.network.api.RegistrationApiV2.SubmitVerificationCodeError
 import org.signal.network.api.RegistrationApiV2.VerificationCodeTransport
+import org.signal.registration.LanDeviceNotAuthorizedException
 import org.signal.registration.LanPasswordInvalidException
 import org.signal.registration.LocalAuthCodeBus
 import org.signal.registration.PendingRestoreOption
@@ -106,6 +107,9 @@ class VerificationCodeViewModel(
   val state: StateFlow<VerificationCodeState> = _state.asStateFlow()
 
   private val codeEntryPresenter = CodeEntryFieldPresenter(viewModelScope)
+  private var hasHandledInitialParentState = false
+  private val registrationInFlightSessionIds = mutableSetOf<String>()
+  private val registeredSessionIds = mutableSetOf<String>()
 
   init {
     _state
@@ -113,7 +117,22 @@ class VerificationCodeViewModel(
       .launchIn(viewModelScope)
 
     parentState
-      .onEach { onEvent(VerificationCodeScreenEvents.ParentStateChanged(it)) }
+      .onEach { parent ->
+        onEvent(VerificationCodeScreenEvents.ParentStateChanged(parent))
+
+        // A completed LAN ticket is persisted before Java registration starts. If the process
+        // died after ticket issuance, resume registration directly instead of completing the
+        // already-used challenge again.
+        if (!parent.isRestoringNavigationState && !hasHandledInitialParentState) {
+          hasHandledInitialParentState = true
+          val session = parent.sessionMetadata
+          if (repository.isLocalAuthEnabled() && session?.verified == true && !parent.sessionE164.isNullOrBlank()) {
+            val restoredState = applyParentState(_state.value, parent).copy(isSubmittingCode = true)
+            _state.value = restoredState
+            _state.value = registerVerifiedSession(restoredState, session).copy(isSubmittingCode = false)
+          }
+        }
+      }
       .launchIn(viewModelScope)
 
     codeEntryPresenter
@@ -191,6 +210,28 @@ class VerificationCodeViewModel(
    * likely expired server-side. Rather than let the user enter a code only to fail, restart the flow from the beginning.
    */
   private suspend fun applyForegrounded(state: VerificationCodeState): VerificationCodeState {
+    val completedSession = state.sessionMetadata?.takeIf { state.localAuth && it.verified }
+    if (
+      completedSession != null &&
+      state.snackbars.networkError &&
+      !state.isSubmittingCode &&
+      state.snackbars.rateLimitedRetryAfter == null
+    ) {
+      val freshSession = repository.validateSession(completedSession.id)
+      if (freshSession?.verified != true) {
+        Log.w(TAG, "[Foregrounded] The saved LAN registration ticket has expired or is invalid. Returning to phone number entry.")
+        parentEventEmitter.navigateBack()
+        return state.copy(sessionMetadata = null)
+      }
+
+      val retryState = state.copy(
+        sessionMetadata = freshSession,
+        isSubmittingCode = true,
+        snackbars = state.snackbars.copy(networkError = false)
+      )
+      return registerVerifiedSession(retryState, freshSession).copy(isSubmittingCode = false)
+    }
+
     val lastUpdated = repository.getInProgressRegistrationDataLastUpdated() ?: return state
     val age = (clock() - lastUpdated).milliseconds
 
@@ -373,83 +414,132 @@ class VerificationCodeViewModel(
       return state.copy(snackbars = state.snackbars.copy(incorrectVerificationCode = true), incorrectCodeAttempts = newAttempts)
     }
 
-    parentEventEmitter(RegistrationFlowEvent.VerificationCodeAccepted(code))
+    return registerVerifiedSession(state, sessionMetadata, code)
+  }
 
-    // If this install was already registered with this number, its key material has to carry forward
-    val preExistingRegistrationData = parentState.value.preExistingRegistrationData?.takeIf { it.e164 == state.e164 }
+  /**
+   * Registers with an already-verified session. LAN tickets are durably saved before the Java
+   * request so a process death or transient network failure cannot force a second challenge
+   * completion and strand the ticket.
+   */
+  private suspend fun registerVerifiedSession(
+    state: VerificationCodeState,
+    sessionMetadata: SessionMetadata,
+    verificationCode: String? = null
+  ): VerificationCodeState {
+    if (!sessionMetadata.verified) return state
 
-    val registerResult = repository.registerAccountWithSession(
-      e164 = state.e164,
-      sessionId = sessionMetadata.id,
-      skipDeviceTransfer = true,
-      preExistingRegistrationData = preExistingRegistrationData
-    )
+    val sessionId = sessionMetadata.id
+    if (sessionId in registeredSessionIds || !registrationInFlightSessionIds.add(sessionId)) {
+      return state
+    }
 
-    return when (registerResult) {
-      is RequestResult.Success -> {
-        val (response, keyMaterial, aci) = registerResult.result
-
-        parentEventEmitter(RegistrationFlowEvent.Registered(aci, keyMaterial.accountEntropyPool, response.storageCapable, phoneNumberless = response.e164 == null))
-
-        val pendingRestore = pendingRestoreNavigation()
-        when {
-          pendingRestore != null -> {
-            Log.i(TAG, "[Register] A restore was deferred until after SMS verification. Resuming it now.")
-            parentEventEmitter.navigateTo(pendingRestore)
-          }
-          response.reregistration && parentState.value.pendingRestoreOption == null && parentState.value.preExistingRegistrationData == null -> parentEventEmitter.navigateTo(RegistrationRoute.ArchiveRestoreSelection.forPostRegisterWithPinUnknown())
-          response.storageCapable -> parentEventEmitter.navigateTo(RegistrationRoute.PinEntryForSvrRestore)
-          else -> parentEventEmitter.navigateTo(RegistrationRoute.PinCreate)
-        }
-        state
+    try {
+      if (repository.isLocalAuthEnabled()) {
+        val currentFlowState = parentState.value
+        repository.saveFlowState(
+          currentFlowState.copy(
+            sessionMetadata = sessionMetadata,
+            sessionE164 = currentFlowState.sessionE164 ?: state.e164,
+            submittedVerificationCode = verificationCode ?: currentFlowState.submittedVerificationCode
+          )
+        )
+        parentEventEmitter(RegistrationFlowEvent.SessionUpdated(sessionMetadata))
       }
-      is RequestResult.NonSuccess -> {
-        when (val error = registerResult.error) {
-          is RegisterAccountError.SessionNotFoundOrNotVerified -> {
-            Log.w(TAG, "[Register] Session not found or not verified: ${error.message}. Navigating back to phone number entry.")
+
+      verificationCode?.let { parentEventEmitter(RegistrationFlowEvent.VerificationCodeAccepted(it)) }
+
+      // If this install was already registered with this number, its key material has to carry forward.
+      val preExistingRegistrationData = parentState.value.preExistingRegistrationData?.takeIf { it.e164 == state.e164 }
+
+      val registerResult = repository.registerAccountWithSession(
+        e164 = state.e164,
+        sessionId = sessionMetadata.id,
+        skipDeviceTransfer = true,
+        preExistingRegistrationData = preExistingRegistrationData
+      )
+
+      return when (registerResult) {
+        is RequestResult.Success -> {
+          registeredSessionIds.add(sessionId)
+          val (response, keyMaterial, aci) = registerResult.result
+
+          parentEventEmitter(RegistrationFlowEvent.Registered(aci, keyMaterial.accountEntropyPool, response.storageCapable, phoneNumberless = response.e164 == null))
+
+          val pendingRestore = pendingRestoreNavigation()
+          when {
+            pendingRestore != null -> {
+              Log.i(TAG, "[Register] A restore was deferred until after verification. Resuming it now.")
+              parentEventEmitter.navigateTo(pendingRestore)
+            }
+            response.reregistration && parentState.value.pendingRestoreOption == null && parentState.value.preExistingRegistrationData == null -> parentEventEmitter.navigateTo(RegistrationRoute.ArchiveRestoreSelection.forPostRegisterWithPinUnknown())
+            response.storageCapable -> parentEventEmitter.navigateTo(RegistrationRoute.PinEntryForSvrRestore)
+            else -> parentEventEmitter.navigateTo(RegistrationRoute.PinCreate)
+          }
+          state
+        }
+        is RequestResult.NonSuccess -> {
+          when (val error = registerResult.error) {
+            is RegisterAccountError.SessionNotFoundOrNotVerified -> {
+              Log.w(TAG, "[Register] Session not found or not verified: ${error.message}. Navigating back to phone number entry.")
+              parentEventEmitter.navigateBack()
+              state
+            }
+            is RegisterAccountError.DeviceTransferPossible -> {
+              error("[Register] Got told a device transfer is possible. We should never get into this state. Resetting.")
+            }
+            is RegisterAccountError.RegistrationLock -> {
+              Log.w(TAG, "[Register] Reglocked.")
+              parentEventEmitter.navigateTo(
+                RegistrationRoute.PinEntryForRegistrationLock(
+                  timeRemaining = error.data.timeRemaining,
+                  svrCredentials = error.data.svr2Credentials
+                )
+              )
+              state
+            }
+            is RegisterAccountError.RateLimited -> {
+              Log.w(TAG, "[Register] Rate limited (retryAfter: ${error.retryAfter}).")
+              state.copy(snackbars = state.snackbars.copy(rateLimitedRetryAfter = error.retryAfter))
+            }
+            is RegisterAccountError.InvalidRequest -> {
+              if (repository.isLocalAuthEnabled()) {
+                Log.w(TAG, "[Register] Local Auth rejected the registration ticket. Returning to phone number entry for a fresh challenge.")
+                parentEventEmitter.navigateBack()
+                state
+              } else {
+                Log.w(TAG, "[Register] Invalid request when registering account: ${error.message}")
+                state.copy(snackbars = state.snackbars.copy(registrationError = true))
+              }
+            }
+            is RegisterAccountError.RegistrationRecoveryPasswordIncorrect -> {
+              error("[Register] Got told the registration recovery password incorrect. We don't use the RRP in this flow, and should never get this error. Resetting. Message: ${error.message}")
+            }
+            is RegisterAccountError.InvalidReceiptCredentialPresentation,
+            is RegisterAccountError.TwoFactorRequired,
+            RegisterAccountError.PostQuantumRatchetRequired -> {
+              Log.w(TAG, "[Register] Unexpected error when registering account: $error")
+              state.copy(snackbars = state.snackbars.copy(registrationError = true))
+            }
+          }
+        }
+        is RequestResult.RetryableNetworkError -> {
+          Log.w(TAG, "[Register] Network error.", registerResult.networkError)
+          state.copy(snackbars = state.snackbars.copy(networkError = true))
+        }
+        is RequestResult.ApplicationError -> {
+          if (repository.isLocalAuthEnabled() && registerResult.cause is LanDeviceNotAuthorizedException) {
+            Log.w(TAG, "[Register] The LAN registration ticket expired or the device is no longer authorized. Returning to phone number entry.")
             parentEventEmitter.navigateBack()
             state
-          }
-          is RegisterAccountError.DeviceTransferPossible -> {
-            error("[Register] Got told a device transfer is possible. We should never get into this state. Resetting.")
-          }
-          is RegisterAccountError.RegistrationLock -> {
-            Log.w(TAG, "[Register] Reglocked.")
-            parentEventEmitter.navigateTo(
-              RegistrationRoute.PinEntryForRegistrationLock(
-                timeRemaining = error.data.timeRemaining,
-                svrCredentials = error.data.svr2Credentials
-              )
-            )
-            state
-          }
-          is RegisterAccountError.RateLimited -> {
-            Log.w(TAG, "[Register] Rate limited (retryAfter: ${error.retryAfter}).")
-            state.copy(snackbars = state.snackbars.copy(rateLimitedRetryAfter = error.retryAfter))
-          }
-          is RegisterAccountError.InvalidRequest -> {
-            Log.w(TAG, "[Register] Invalid request when registering account: ${error.message}")
-            state.copy(snackbars = state.snackbars.copy(registrationError = true))
-          }
-          is RegisterAccountError.RegistrationRecoveryPasswordIncorrect -> {
-            error("[Register] Got told the registration recovery password incorrect. We don't use the RRP in this flow, and should never get this error. Resetting. Message: ${error.message}")
-          }
-          is RegisterAccountError.InvalidReceiptCredentialPresentation,
-          is RegisterAccountError.TwoFactorRequired,
-          RegisterAccountError.PostQuantumRatchetRequired -> {
-            Log.w(TAG, "[Register] Unexpected error when registering account: $error")
-            state.copy(snackbars = state.snackbars.copy(registrationError = true))
+          } else {
+            Log.w(TAG, "[Register] Unknown error when registering account.", registerResult.cause)
+            state.copy(snackbars = state.snackbars.copy(unknownError = true))
           }
         }
       }
-      is RequestResult.RetryableNetworkError -> {
-        Log.w(TAG, "[Register] Network error.", registerResult.networkError)
-        state.copy(snackbars = state.snackbars.copy(networkError = true))
-      }
-      is RequestResult.ApplicationError -> {
-        Log.w(TAG, "[Register] Unknown error when registering account.", registerResult.cause)
-        state.copy(snackbars = state.snackbars.copy(unknownError = true))
-      }
+    } finally {
+      registrationInFlightSessionIds.remove(sessionId)
     }
   }
 

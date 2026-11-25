@@ -65,6 +65,7 @@ import org.signal.network.service.ArchiveError
 import org.signal.network.service.UsernameService.ConfirmUsernameError
 import org.signal.network.service.UsernameService.ConfirmedUsername
 import org.signal.network.service.UsernameService.ReserveUsernameError
+import org.signal.registration.LanDeviceNotAuthorizedException
 import org.signal.registration.LinkAndSyncWaitResult
 import org.signal.registration.NetworkController
 import org.signal.registration.NetworkController.BackupMasterKeyError
@@ -248,7 +249,7 @@ class AppRegistrationNetworkController(
       receiptCredentialPresentation != null ||
       aci != null
     ) {
-      return RequestResult.ApplicationError(SecurityException("Only an administrator-enrolled handset can register"))
+      return RequestResult.ApplicationError(LanDeviceNotAuthorizedException())
     }
     val result = registrationApi.registerAccount(
       e164 = e164,
