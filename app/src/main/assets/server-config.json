@@ -26,5 +26,9 @@
     "backupServerPublicParams": "",
     "svr2MrEnclave": "",
     "unidentifiedSenderTrustRoots": []
+  },
+  "capabilities": {
+    "pinRecovery": "SOFTWARE_LAN_V1",
+    "contactDiscovery": "AUTHENTICATED_LAN"
   }
 }

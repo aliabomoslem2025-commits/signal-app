@@ -6,7 +6,6 @@ package org.thoughtcrime.securesms.jobs
 
 import org.signal.core.util.logging.Log
 import org.signal.network.exceptions.NonSuccessfulResponseCodeException
-import org.thoughtcrime.securesms.BuildConfig
 import org.thoughtcrime.securesms.dependencies.AppDependencies
 import org.thoughtcrime.securesms.jobmanager.Job
 import org.thoughtcrime.securesms.jobmanager.JsonJobData
@@ -16,7 +15,7 @@ import org.thoughtcrime.securesms.pin.Svr3Migration
 import org.thoughtcrime.securesms.pin.SvrRepository
 import org.whispersystems.signalservice.api.svr.SecureValueRecovery.BackupResponse
 import org.whispersystems.signalservice.api.svr.SecureValueRecovery.PinChangeSession
-import org.whispersystems.signalservice.api.svr.SecureValueRecoveryV2
+import org.whispersystems.signalservice.api.svr.SecureValueRecovery
 import kotlin.concurrent.withLock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
@@ -88,7 +87,7 @@ class Svr2MirrorJob private constructor(parameters: Parameters, private var seri
         return Result.success()
       }
 
-      val svr2: SecureValueRecoveryV2 = AppDependencies.signalServiceAccountManager.getSecureValueRecoveryV2(BuildConfig.SVR2_MRENCLAVE)
+      val svr2: SecureValueRecovery = SvrRepository.primaryImplementation()
 
       val session: PinChangeSession = serializedChangeSession?.let { session ->
         svr2.resumePinChangeSession(pin, SignalStore.svr.masterKey, session)
@@ -149,3 +148,4 @@ class Svr2MirrorJob private constructor(parameters: Parameters, private var seri
     }
   }
 }
+

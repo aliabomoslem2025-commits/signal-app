@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.Navigation.findNavController
 import org.signal.core.ui.util.SpanUtil
 import org.thoughtcrime.securesms.R
+import org.thoughtcrime.securesms.BuildConfig
 import org.thoughtcrime.securesms.components.TemporaryScreenshotSecurity
 import org.thoughtcrime.securesms.lock.v2.CreateSvrPinViewModel.NavigationEvent
 import org.thoughtcrime.securesms.lock.v2.CreateSvrPinViewModel.PinErrorEvent
@@ -29,6 +30,11 @@ class CreateSvrPinFragment : BaseSvrPinFragment<CreateSvrPinViewModel?>() {
       initializeViewStatesForPinChange()
     } else {
       initializeViewStatesForPinCreate()
+    }
+
+    if (BuildConfig.LAN_NO_ENCLAVE) {
+      description.setText(R.string.lan_software_recovery_notice)
+      description.setLearnMoreVisible(false)
     }
 
     label.text = getPinLengthRestrictionText(R.plurals.CreateKbsPinFragment__pin_must_be_at_least_digits)
@@ -106,3 +112,4 @@ class CreateSvrPinFragment : BaseSvrPinFragment<CreateSvrPinViewModel?>() {
     }
   }
 }
+

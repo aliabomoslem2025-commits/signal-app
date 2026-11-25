@@ -1,6 +1,7 @@
 package org.thoughtcrime.securesms.contacts.sync
 
 import android.content.Context
+import org.thoughtcrime.securesms.BuildConfig
 import androidx.annotation.WorkerThread
 import org.signal.contacts.SystemContactsRepository
 import org.signal.core.models.recipients.RecipientId
@@ -91,7 +92,9 @@ object ContactDiscoveryRefreshV2 {
   @WorkerThread
   @Synchronized
   fun lookupE164(e164: String): ContactDiscovery.LookupResult? {
-    val result = SignalNetwork.cdsApi.getRegisteredUsers(
+    val result = if (BuildConfig.LAN_NO_ENCLAVE) {
+      LanContactDiscovery.lookup(setOf(e164), 10_000)
+    } else SignalNetwork.cdsApi.getRegisteredUsers(
       previousE164s = emptySet(),
       newE164s = setOf(e164),
       serviceIds = SignalDatabase.recipients.getAllServiceIdProfileKeyPairs(),
@@ -147,7 +150,7 @@ object ContactDiscoveryRefreshV2 {
     val tag = "refreshInternal-v2"
     val stopwatch = Stopwatch(tag)
 
-    val previousE164s: Set<String> = if (SignalStore.misc.cdsToken != null && !isPartialRefresh) inputPreviousE164s else emptySet()
+    val previousE164s: Set<String> = if (!BuildConfig.LAN_NO_ENCLAVE && SignalStore.misc.cdsToken != null && !isPartialRefresh) inputPreviousE164s else emptySet()
 
     val allE164s: Set<String> = recipientE164s + systemE164s
     val newRawE164s: Set<String> = allE164s - previousE164s
@@ -169,7 +172,9 @@ object ContactDiscoveryRefreshV2 {
 
     stopwatch.split("preamble")
 
-    val result = SignalNetwork.cdsApi.getRegisteredUsers(
+    val result = if (BuildConfig.LAN_NO_ENCLAVE) {
+      LanContactDiscovery.lookup(previousE164s + newE164s, timeoutMs)
+    } else SignalNetwork.cdsApi.getRegisteredUsers(
       previousE164s = previousE164s,
       newE164s = newE164s,
       serviceIds = SignalDatabase.recipients.getAllServiceIdProfileKeyPairs(),
@@ -212,6 +217,15 @@ object ContactDiscoveryRefreshV2 {
 
       is NetworkResult.NetworkError -> throw result.exception
       is NetworkResult.ApplicationError -> throw result.throwable
+    }
+
+    if (BuildConfig.LAN_NO_ENCLAVE) {
+      SignalStore.misc.cdsToken = null
+      if (isPartialRefresh) {
+        SignalDatabase.cds.updateAfterPartialCdsQuery(newE164s)
+      } else {
+        SignalDatabase.cds.updateAfterFullCdsQuery(previousE164s + newE164s, allE164s + newE164s)
+      }
     }
 
     if (!isPartialRefresh && SignalStore.misc.isCdsBlocked) {
@@ -295,3 +309,4 @@ object ContactDiscoveryRefreshV2 {
     return "~${nearestThousand}k"
   }
 }
+

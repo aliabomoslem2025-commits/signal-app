@@ -186,3 +186,4 @@ public final class CdsiV2Service {
     Observable<Response> handleRequest(String username, String password, Request request, Consumer<byte[]> tokenSaver);
   }
 }
+
