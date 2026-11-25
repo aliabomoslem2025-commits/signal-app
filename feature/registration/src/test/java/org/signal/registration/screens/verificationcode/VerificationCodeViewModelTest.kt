@@ -47,6 +47,7 @@ import org.signal.registration.KeyMaterial
 import org.signal.registration.PendingRestoreOption
 import org.signal.registration.PreExistingRegistrationData
 import org.signal.registration.RegisteredAccountData
+import org.signal.registration.LanDeviceNotAuthorizedException
 import org.signal.registration.RegistrationFlowEvent
 import org.signal.registration.RegistrationFlowState
 import org.signal.registration.RegistrationRepository
@@ -142,6 +143,41 @@ class VerificationCodeViewModelTest {
     }
     assertThat(emittedEvents[0]).isInstanceOf<RegistrationFlowEvent.SessionUpdated>()
     assertThat(emittedEvents[1]).isInstanceOf<RegistrationFlowEvent.VerificationCodeAccepted>()
+  }
+
+  @Test
+  fun `expired local auth challenge returns to phone entry instead of reporting wrong password`() = runTest {
+    val challenge = createSessionMetadata(id = "expired-local-challenge")
+    parentState.value = RegistrationFlowState(
+      sessionMetadata = challenge,
+      sessionE164 = "+15551234567",
+      isRestoringNavigationState = false
+    )
+
+    every { mockRepository.isLocalAuthEnabled() } returns true
+    coEvery {
+      mockRepository.submitLocalVerificationCode(challenge.id, "123456", "local-password", "")
+    } returns RequestResult.ApplicationError(LanDeviceNotAuthorizedException())
+
+    advanceUntilIdle()
+
+    viewModel.applyEvent(
+      VerificationCodeState(
+        sessionMetadata = challenge,
+        e164 = "+15551234567",
+        localAuth = true,
+        localPasswordSetupRequired = false,
+        pendingLocalCode = "123456"
+      ),
+      VerificationCodeScreenEvents.LocalPasswordSubmitted("local-password", ""),
+      stateEmitter
+    )
+
+    val finalState = stateEmitter.last()
+    assertThat(finalState.sessionMetadata).isNull()
+    assertThat(finalState.pendingLocalCode).isNull()
+    assertThat(finalState.snackbars.localPasswordInvalid).isFalse()
+    assertThat(emittedEvents.any { it is RegistrationFlowEvent.NavigateBack }).isTrue()
   }
 
   @Test

@@ -400,6 +400,11 @@ class VerificationCodeViewModel(
         if (result.cause is LanPasswordInvalidException) {
           return state.copy(snackbars = state.snackbars.copy(localPasswordInvalid = true))
         }
+        if (repository.isLocalAuthEnabled() && result.cause is LanDeviceNotAuthorizedException) {
+          Log.w(TAG, "[SubmitCode] The LAN challenge expired or the device is no longer authorized. Returning to phone number entry.")
+          parentEventEmitter.navigateBack()
+          return state.copy(sessionMetadata = null, pendingLocalCode = null)
+        }
         Log.w(TAG, "[SubmitCode] Unknown error when submitting verification code.", result.cause)
         return state.copy(snackbars = state.snackbars.copy(unknownError = true))
       }
