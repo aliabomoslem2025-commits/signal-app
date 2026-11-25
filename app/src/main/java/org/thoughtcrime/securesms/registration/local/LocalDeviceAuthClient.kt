@@ -32,8 +32,9 @@ class LocalDeviceAuthClient(context: Context) {
   fun isChallengeSession(id: String): Boolean = LocalAuthSessionId.isChallengeSession(id)
 
   /**
-   * This is a client-side shape and expiry check only. The Java server and Local Auth
-   * sidecar remain authoritative for signature, device binding, revocation and one-use checks.
+   * The sidecar returns a signed `LAN1.` registration ticket. This client-side shape and
+   * expiry check is advisory; the Java server and Local Auth sidecar remain authoritative for
+   * signature, device binding, revocation and one-use checks.
    */
   fun isCompletedSession(id: String): Boolean = LocalAuthSessionId.isCompletedSession(id)
 

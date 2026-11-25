@@ -27,10 +27,10 @@ internal object LocalAuthSessionId {
   private const val SIGNATURE_BYTES = 32
   private const val NONCE_BYTES = 32
 
-  private val RAW_URL_BASE64 = Regex("^[A-Za-z0-9_-]+$")
-  private val E164 = Regex("^\\+[1-9][0-9]{7,14}$")
-  private val HEX_48 = Regex("^[0-9a-f]{48}$")
-  private val HEX_64 = Regex("^[0-9a-f]{64}$")
+  private val rawUrlBase64Pattern = Regex("^[A-Za-z0-9_-]+$")
+  private val e164Pattern = Regex("^\\+[1-9][0-9]{7,14}$")
+  private val hex48Pattern = Regex("^[0-9a-f]{48}$")
+  private val hex64Pattern = Regex("^[0-9a-f]{64}$")
 
   fun isChallengeSession(
     id: String,
@@ -61,8 +61,8 @@ internal object LocalAuthSessionId {
       val nonceBytes = decodeRawUrlBase64(nonce, NONCE_BYTES)
 
       if (
-        !HEX_48.matches(challengeId) ||
-        !E164.matches(phone) ||
+        !hex48Pattern.matches(challengeId) ||
+        !e164Pattern.matches(phone) ||
         nonceBytes?.size != NONCE_BYTES ||
         expiresAt <= nowEpochSeconds
       ) {
@@ -110,9 +110,9 @@ internal object LocalAuthSessionId {
       val expiryValue = claims.opt("exp") as? Number ?: return false
       val expiresAt = expiryValue.toLong()
 
-      E164.matches(phone) &&
-        HEX_64.matches(androidIdHash) &&
-        HEX_48.matches(jti) &&
+      e164Pattern.matches(phone) &&
+        hex64Pattern.matches(androidIdHash) &&
+        hex48Pattern.matches(jti) &&
         expiryValue.toDouble() == expiresAt.toDouble() &&
         expiresAt > nowEpochSeconds
     } catch (_: Exception) {
@@ -121,7 +121,7 @@ internal object LocalAuthSessionId {
   }
 
   private fun decodeRawUrlBase64(value: String, maxDecodedBytes: Int): ByteArray? {
-    if (value.isEmpty() || !RAW_URL_BASE64.matches(value)) return null
+    if (value.isEmpty() || !rawUrlBase64Pattern.matches(value)) return null
 
     val maxEncodedLength = ((maxDecodedBytes + 2) / 3) * 4
     if (value.length > maxEncodedLength) return null
