@@ -91,7 +91,9 @@ class LocalDeviceAuthClient(context: Context) {
         .put("password", password).put("passwordConfirmation", passwordConfirmation)
     )
     val ticketId = response.getString("sessionId")
-    require(isCompletedSession(ticketId)) { "Local authorization returned an invalid or expired registration session" }
+    if (!isCompletedSession(ticketId)) {
+      throw LanDeviceNotAuthorizedException()
+    }
     LocalAuthCodeBus.consume(id, code)
     metadata(ticketId, allowed = false, verified = true)
   }
