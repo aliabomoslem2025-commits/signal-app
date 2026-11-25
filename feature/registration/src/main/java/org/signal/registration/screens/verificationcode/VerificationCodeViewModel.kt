@@ -126,7 +126,7 @@ class VerificationCodeViewModel(
         if (!parent.isRestoringNavigationState && !hasHandledInitialParentState) {
           hasHandledInitialParentState = true
           val session = parent.sessionMetadata
-          if (repository.isLocalAuthEnabled() && session?.verified == true && !parent.sessionE164.isNullOrBlank()) {
+          if (repository.isLocalAuthEnabled() && session != null && session.verified && !parent.sessionE164.isNullOrBlank()) {
             val restoredState = applyParentState(_state.value, parent).copy(isSubmittingCode = true)
             _state.value = restoredState
             _state.value = registerVerifiedSession(restoredState, session).copy(isSubmittingCode = false)
@@ -529,7 +529,10 @@ class VerificationCodeViewModel(
         }
         is RequestResult.ApplicationError -> {
           if (repository.isLocalAuthEnabled() && registerResult.cause is LanDeviceNotAuthorizedException) {
-            Log.w(TAG, "[Register] The LAN registration ticket expired or the device is no longer authorized. Returning to phone number entry.")
+            Log.w(
+              TAG,
+              "[Register] The LAN registration ticket expired or the device is no longer authorized. Returning to phone number entry."
+            )
             parentEventEmitter.navigateBack()
             state
           } else {
