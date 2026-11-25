@@ -29,14 +29,13 @@ class LocalDeviceAuthClient(context: Context) {
   private val enrollmentKey = LocalDeviceAuthKeyStore(app)
   private val config: LocalServerConfig get() = LocalServerConfig.load(app)
 
-  fun isChallengeSession(id: String): Boolean = id.startsWith(LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX)
+  fun isChallengeSession(id: String): Boolean = LocalAuthSessionId.isChallengeSession(id)
 
-  fun isCompletedSession(id: String): Boolean = try {
-    val bytes = Base64.decode(id, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-    String(bytes, StandardCharsets.UTF_8).startsWith("LAN1.")
-  } catch (_: Exception) {
-    false
-  }
+  /**
+   * This is a client-side shape and expiry check only. The Java server and Local Auth
+   * sidecar remain authoritative for signature, device binding, revocation and one-use checks.
+   */
+  fun isCompletedSession(id: String): Boolean = LocalAuthSessionId.isCompletedSession(id)
 
   suspend fun createSession(phone: String): SessionMetadata = withContext(Dispatchers.IO) {
     enrollmentKey.getOrCreateKeyPair()
@@ -48,10 +47,14 @@ class LocalDeviceAuthClient(context: Context) {
       .put("challengeId", challenge.getString("challengeId"))
       .put("nonce", challenge.getString("nonce"))
       .put("phone", phone)
+      // Persist the server-issued expiry with the opaque challenge so a restored
+      // registration flow cannot reuse a challenge that has already expired.
+      .put("expiresAt", challenge.getString("expiresAt"))
     val id = LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX + Base64.encodeToString(
       state.toString().toByteArray(StandardCharsets.UTF_8),
       Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
     )
+    require(isChallengeSession(id)) { "Local authorization returned an invalid or expired challenge" }
     metadata(id, allowed = true, verified = false)
   }
 
@@ -87,7 +90,7 @@ class LocalDeviceAuthClient(context: Context) {
         .put("password", password).put("passwordConfirmation", passwordConfirmation)
     )
     val ticketId = response.getString("sessionId")
-    require(isCompletedSession(ticketId)) { "Local authorization returned an invalid signed session" }
+    require(isCompletedSession(ticketId)) { "Local authorization returned an invalid or expired registration session" }
     LocalAuthCodeBus.consume(id, code)
     metadata(ticketId, allowed = false, verified = true)
   }
@@ -107,12 +110,8 @@ class LocalDeviceAuthClient(context: Context) {
   )
 
   private fun decodeChallenge(id: String): JSONObject {
-    require(isChallengeSession(id)) { "Not an enrolled LAN challenge" }
-    val bytes = Base64.decode(
-      id.removePrefix(LocalAuthCodeBus.CHALLENGE_SESSION_PREFIX),
-      Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-    )
-    return JSONObject(String(bytes, StandardCharsets.UTF_8))
+    return LocalAuthSessionId.decodeChallenge(id)
+      ?: throw IllegalArgumentException("Local authorization challenge is malformed or expired")
   }
 
   private fun post(path: String, body: JSONObject): JSONObject {
